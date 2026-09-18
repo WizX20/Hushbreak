@@ -35,7 +35,8 @@ Settings: vlc --extraintf luaintf --lua-intf hushbreak \
   feed          override the feed URL; "{mount}" is replaced by the mount name
 
 Calibration by ear: the "Hushbreak calibration" extension (View menu) writes a marker
-file; this script picks it up and recomputes the delay from what you heard.
+file when you hear the first commercial or the first song after the break; this script
+picks it up and recomputes the delay from the feed.
 See README.md for installation.
 ]]
 
@@ -212,7 +213,9 @@ while true do
         if feed_url and now >= next_poll_at then
             local fetched = core.parse_feed(read_url(feed_url))
             if #fetched > 0 then
-                entries = fetched
+                -- The feed is a short window; keep a block's spots until well past the
+                -- grace period, they scroll out while its tail is still playing.
+                entries = core.merge_entries(entries, fetched, now - delay - settings.grace - 60)
             else
                 -- Unreachable, or a valid but empty answer: keep the previous list in use.
                 vlc.msg.warn("[hushbreak] feed not reachable")
@@ -232,6 +235,9 @@ while true do
                 drift:reset(mono(), position)
                 delay = base_delay
                 log("calibrated on block %s: delay is now %.0f s", action, base_delay)
+            elseif action == "end" then
+                vlc.msg.warn("[hushbreak] calibration ignored: the feed shows no song after an ad block yet; "
+                    .. "try again in a few seconds")
             else
                 vlc.msg.warn("[hushbreak] calibration ignored: the feed shows no ad block yet")
             end
@@ -254,7 +260,7 @@ while true do
             log("ad break: volume %d -> %d (%s)", normal_volume, low_volume, spot.title)
         elseif spot and ducked and spot.title ~= last_title then
             log("  next spot: %s", spot.title)
-        elseif ducked and core.block_ended(entries, stream_now, settings.grace) then
+        elseif ducked and core.block_ended(entries, stream_now, settings.grace, settings.fade_up) then
             if volume == low_volume then
                 fade(low_volume, normal_volume, settings.fade_up)
                 log("ad break over: volume back to %d", normal_volume)
@@ -265,10 +271,10 @@ while true do
         end
         last_title = spot and spot.title or ""
 
-        -- Wake up for the next poll or spot boundary, but at least once a second so the
-        -- calibration marker is noticed promptly.
+        -- Wake up for the next poll or boundary (a spot edge, or the fade-up before the
+        -- song), but at least once a second so the calibration marker is noticed promptly.
         local wait = next_poll_at - now
-        local transition = core.next_transition(entries, now, delay)
+        local transition = core.next_transition(entries, now, delay, settings.fade_up)
         if transition and transition < wait then
             wait = transition
         end

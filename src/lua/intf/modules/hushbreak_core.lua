@@ -58,6 +58,31 @@ function M.parse_feed(xml)
     return entries
 end
 
+--- Merge a fresh feed answer into the entries kept from earlier polls, newest first.
+-- The live feed is a short window (`numberToFetch`); a block's spots scroll out of it
+-- while the station's own commercials and jingles after them are still playing, so
+-- the spots are remembered until `horizon` (a cue time) has passed their end. A fresh
+-- answer wins over a kept entry with the same start.
+function M.merge_entries(kept, fetched, horizon)
+    local by_start = {}
+    local merged = {}
+    for _, list in ipairs({ kept, fetched }) do
+        for _, e in ipairs(list) do
+            local key = string.format("%.3f", e.start)
+            if e.stop >= horizon then
+                if by_start[key] then
+                    merged[by_start[key]] = e
+                else
+                    merged[#merged + 1] = e
+                    by_start[key] = #merged
+                end
+            end
+        end
+    end
+    table.sort(merged, function(a, b) return a.start > b.start end)
+    return merged
+end
+
 --- The real ad spots (with a duration) among the entries.
 function M.spots(entries)
     local spots = {}
@@ -93,25 +118,29 @@ function M.last_spot_end(entries)
     return last
 end
 
---- True when a titled track (a real song; jingles, news and promos carry no title)
--- started at or after the last known spot. Programme has resumed, whatever the feed
--- says about markers.
-function M.song_started_after_spots(entries)
+--- Start (cue time) of the first titled track (a real song; jingles, news and promos
+-- carry no title) at or after the last known spot: the moment the programme resumes.
+-- Nil without spots or without such a song.
+function M.song_after_spots(entries)
     local last = M.last_spot_end(entries)
     if not last then
-        return false
+        return nil
     end
+    local first = nil
     for _, e in ipairs(entries) do
-        if e.kind == "track" and e.title ~= "" and e.start >= last - 1.5 then
-            return true
+        if e.kind == "track" and e.title ~= "" and e.start >= last - 1.5 and (not first or e.start < first) then
+            first = e.start
         end
     end
-    return false
+    return first
 end
 
 --- Whether ducking should stop. Only when the end of the break is certain: no spot is
--- active, and a titled song has started after the last spot. Without that, stay ducked
--- until `grace` seconds have passed since the last known spot.
+-- active, and the listener has reached the first titled song after the last spot (at
+-- `lead` seconds before it, so a fade of that length lands on the song). The song is
+-- published ~50 s after its cue start and heard `delay` seconds after it; a listener
+-- further behind than the feed lag must not un-duck at publication. Without a song,
+-- stay ducked until `grace` seconds have passed since the last known spot.
 --
 -- The "COMMERCIAL INSERT TRIGGER" entry (ad_type=insert) that follows the last spot is
 -- deliberately not an end marker: it marks the end of Triton's own spots, not of the
@@ -122,7 +151,7 @@ end
 -- two runs of spots - so the grace period is long, and a song that stays ducked a little
 -- longer after a missed song entry is the safer error than the volume coming up in the
 -- middle of the commercials.
-function M.block_ended(entries, stream_now, grace)
+function M.block_ended(entries, stream_now, grace, lead)
     if M.active_spot(entries, stream_now) then
         return false
     end
@@ -130,7 +159,8 @@ function M.block_ended(entries, stream_now, grace)
     if not last then
         return true
     end
-    if M.song_started_after_spots(entries) then
+    local song = M.song_after_spots(entries)
+    if song and stream_now + (lead or 0) >= song then
         return true
     end
     return stream_now >= last + M.SPOT_MARGIN + grace
@@ -206,17 +236,25 @@ function M.next_poll(entries, now, feed_lag, retry, idle)
     return retry
 end
 
---- Seconds until the listener reaches the next spot boundary (a start or an end),
--- or nil when no boundary lies ahead. The interface script wakes up for these so the
--- fade lands on the boundary rather than on the next poll.
-function M.next_transition(entries, now, delay)
-    local soonest = nil
+--- Seconds until the listener reaches the next boundary: a spot's start or end, or
+-- `lead` seconds before the first song after the block. Nil when no boundary lies
+-- ahead. The interface script wakes up for these so the fade lands on the boundary
+-- rather than on the next poll.
+function M.next_transition(entries, now, delay, lead)
+    local edges = {}
     for _, spot in ipairs(M.spots(entries)) do
-        for _, edge in ipairs({ spot.start, spot.stop + M.SPOT_MARGIN }) do
-            local at = edge + delay
-            if at > now and (not soonest or at < soonest) then
-                soonest = at
-            end
+        edges[#edges + 1] = spot.start
+        edges[#edges + 1] = spot.stop + M.SPOT_MARGIN
+    end
+    local song = M.song_after_spots(entries)
+    if song then
+        edges[#edges + 1] = song - (lead or 0)
+    end
+    local soonest = nil
+    for _, edge in ipairs(edges) do
+        local at = edge + delay
+        if at > now and (not soonest or at < soonest) then
+            soonest = at
         end
     end
     return soonest and (soonest - now) or nil
@@ -283,14 +321,16 @@ function M.parse_marker(line)
     return action:lower(), tonumber(at)
 end
 
---- The delay implied by a calibration mark: the listener heard the block `action`
--- ("start" or "end") at epoch `at`. Nil when the feed has nothing to compare against.
+--- The delay implied by a calibration mark: at epoch `at` the listener heard the
+-- first commercial of the block ("start") or the first song after it ("end" - the
+-- station's own commercials and jingles follow Triton's last spot, so the song is the
+-- audible end of the break). Nil when the feed has nothing to compare against.
 function M.calibrated_delay(entries, action, at)
     local mark
     if action == "start" then
         mark = M.block_start(entries)
     elseif action == "end" then
-        mark = M.last_spot_end(entries)
+        mark = M.song_after_spots(entries)
     end
     if not mark then
         return nil
