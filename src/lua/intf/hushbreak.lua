@@ -21,10 +21,11 @@ Settings: vlc --extraintf luaintf --lua-intf hushbreak \
                 (53 for KINK: 47 s stream buffer + ~6 s VLC buffer)
   feed_lag      seconds between an entry's cue start and its appearance in the feed (50)
   grace         seconds to stay ducked after the last known spot when the feed has
-                confirmed neither the end of the block nor a song (120). Breaks can
-                hold untitled promo segments between two runs of spots and the feed
-                server stalls for seconds at a time; a long grace keeps the volume
-                from pumping in the middle of the commercials.
+                not shown a song yet (180). Commercials go on after Triton's last
+                spot (measured: 114 s until the song, most of it untitled entries),
+                breaks can hold promo segments between two runs of spots, and the
+                feed server stalls for seconds at a time; a long grace keeps the
+                volume from coming up in the middle of the commercials.
   fade_down     seconds for the fade at the start of a break (0.7)
   fade_up       seconds for the fade back up when the break is over (3)
   retry         seconds between polls while the feed is late (2)
@@ -45,7 +46,7 @@ local settings = {
     min_volume = 0,
     delay = 53,
     feed_lag = 50,
-    grace = 120,
+    grace = 180,
     fade_down = 0.7,
     fade_up = 3,
     retry = 2,

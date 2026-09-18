@@ -33,8 +33,9 @@ end
 --- Parse Triton's now-playing XML into entries, newest first (the feed's order).
 -- Each entry: { kind = "ad"|"track", ad_type = "break"|"insert"|nil,
 --               start, stop (epoch seconds), title }.
--- An 'insert' event is the trigger that sits exactly at the end of an ad block; it has
--- no duration and serves as the end marker. A 'break' is a real spot with a duration.
+-- An 'insert' event is the "COMMERCIAL INSERT TRIGGER" that sits at the end of Triton's
+-- spots; it has no duration and, since commercials go on after it, marks nothing that
+-- the ducking can use. A 'break' is a real spot with a duration.
 function M.parse_feed(xml)
     local entries = {}
     if type(xml) ~= "string" then
@@ -92,20 +93,6 @@ function M.last_spot_end(entries)
     return last
 end
 
---- True when the feed carries the end-of-block trigger for the last known spot.
-function M.has_end_marker(entries)
-    local last = M.last_spot_end(entries)
-    if not last then
-        return false
-    end
-    for _, e in ipairs(entries) do
-        if e.kind == "ad" and e.ad_type == "insert" and e.start >= last - 1.5 then
-            return true
-        end
-    end
-    return false
-end
-
 --- True when a titled track (a real song; jingles, news and promos carry no title)
 -- started at or after the last known spot. Programme has resumed, whatever the feed
 -- says about markers.
@@ -123,13 +110,18 @@ function M.song_started_after_spots(entries)
 end
 
 --- Whether ducking should stop. Only when the end of the break is certain: no spot is
--- active, and the feed shows either the end-of-block trigger or a titled song after the
--- last spot. Without either, stay ducked until `grace` seconds have passed since the
--- last known spot. The next spot is published only ~3 s before it is heard, the feed
--- server stalls for seconds at a time, and a break can hold untitled promo or sponsor
--- segments between two runs of spots - so the grace period is long, and a song that
--- stays ducked a little longer after a missed marker is the safer error than the
--- volume pumping up and down in the middle of the commercials.
+-- active, and a titled song has started after the last spot. Without that, stay ducked
+-- until `grace` seconds have passed since the last known spot.
+--
+-- The "COMMERCIAL INSERT TRIGGER" entry (ad_type=insert) that follows the last spot is
+-- deliberately not an end marker: it marks the end of Triton's own spots, not of the
+-- commercials. In the measured block it was followed by ~80 s of untitled entries the
+-- listener heard as commercials, then jingles, and the song came 114 s after the last
+-- spot. The next spot is published only ~3 s before it is heard, the feed server stalls
+-- for seconds at a time, and a break can hold untitled promo or sponsor segments between
+-- two runs of spots - so the grace period is long, and a song that stays ducked a little
+-- longer after a missed song entry is the safer error than the volume coming up in the
+-- middle of the commercials.
 function M.block_ended(entries, stream_now, grace)
     if M.active_spot(entries, stream_now) then
         return false
@@ -138,7 +130,7 @@ function M.block_ended(entries, stream_now, grace)
     if not last then
         return true
     end
-    if M.has_end_marker(entries) or M.song_started_after_spots(entries) then
+    if M.song_started_after_spots(entries) then
         return true
     end
     return stream_now >= last + M.SPOT_MARGIN + grace

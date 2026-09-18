@@ -1,6 +1,7 @@
 -- Tests for src/lua/intf/modules/hushbreak_core.lua. Run with `lua tests/run.lua`.
 -- The fixture is a real answer of Triton's now-playing feed for KINK (2026-09-18,
--- 14 entries): four ad spots, the end-of-block trigger, and a run of tracks.
+-- 14 entries): four ad spots, the "commercial insert" trigger, ~80 s of untitled entries
+-- (heard as commercials), four jingles, and two songs.
 
 local core = require("hushbreak_core")
 
@@ -9,8 +10,10 @@ local FEED = read_fixture("feed-kink.xml")
 -- Cue times (epoch seconds) of the fixture's ad block.
 local KPN_START = 1789729173.912
 local INTERPOLIS_START = 1789729223.546
-local INTERPOLIS_STOP = 1789729248.546 -- + 25 s
+local INTERPOLIS_STOP = 1789729248.546 -- + 25 s; the insert trigger sits here
+local SUPERSONIC_START = 1789729362.523 -- first titled song after the block
 local BAD_DECISIONS_STOP = 1789729637.435 + 280.322
+local FEED_LAG = 50
 
 local function entries()
     return core.parse_feed(FEED)
@@ -62,13 +65,11 @@ test("active_spot finds the spot playing at a cue time", function()
     assert_eq(core.active_spot(list, KPN_START - 1), nil)
 end)
 
-test("last_spot_end and the end marker", function()
+test("last_spot_end is the end of the newest spot", function()
     local list = entries()
     assert_near(core.last_spot_end(list), INTERPOLIS_STOP, 0.001)
-    assert_eq(core.has_end_marker(list), true)
-    assert_eq(core.has_end_marker(without_insert(list)), false)
+    assert_near(core.last_spot_end(without_insert(list)), INTERPOLIS_STOP, 0.001, "the trigger is not a spot")
     assert_eq(core.last_spot_end({}), nil)
-    assert_eq(core.has_end_marker({}), false)
 end)
 
 local function without_titled_tracks(list)
@@ -88,18 +89,48 @@ test("song_started_after_spots sees titled tracks only", function()
     assert_eq(core.song_started_after_spots({}), false)
 end)
 
-test("block_ended needs the marker, a song, or a long grace period", function()
+test("block_ended needs a song after the last spot, or a long grace period", function()
     local list = entries()
-    local grace = 120
+    local grace = 180
     assert_eq(core.block_ended(list, INTERPOLIS_START + 5, grace), false, "spot still playing")
-    assert_eq(core.block_ended(list, INTERPOLIS_STOP + 1, grace), true, "marker known")
-    local no_marker = without_insert(list)
-    assert_eq(core.block_ended(no_marker, INTERPOLIS_STOP + 1, grace), true, "no marker, but a song started")
-    local unconfirmed = without_titled_tracks(no_marker)
-    assert_eq(core.block_ended(unconfirmed, INTERPOLIS_STOP + 1, grace), false, "nothing certain: within grace")
+    assert_eq(core.block_ended(list, INTERPOLIS_STOP + 1, grace), true, "a song started after the block")
+    assert_eq(core.block_ended(without_insert(list), INTERPOLIS_STOP + 1, grace), true, "the trigger is not needed")
+    local unconfirmed = without_titled_tracks(list)
+    assert_eq(core.block_ended(unconfirmed, INTERPOLIS_STOP + 1, grace), false, "the trigger alone is not enough")
     assert_eq(core.block_ended(unconfirmed, INTERPOLIS_STOP + 100, grace), false, "a stalled feed does not un-duck")
     assert_eq(core.block_ended(unconfirmed, INTERPOLIS_STOP + 0.5 + grace + 0.1, grace), true, "past grace")
     assert_eq(core.block_ended({}, 0, grace), true, "nothing known")
+end)
+
+-- The feed as it looked at wall-clock time `at`: an entry appears `FEED_LAG` seconds
+-- after its cue start.
+local function feed_as_of(list, at)
+    local seen = {}
+    for _, e in ipairs(list) do
+        if e.start + FEED_LAG <= at then
+            seen[#seen + 1] = e
+        end
+    end
+    return seen
+end
+
+test("the insert trigger does not end the break: commercials go on after it", function()
+    -- Replays the fixture's block for a listener 53 s behind cue time. After the last
+    -- spot the feed shows the trigger, an untitled 8 s entry, an untitled 71 s entry and
+    -- four jingles before the first titled song; the volume came up ~1 minute early
+    -- when the trigger counted as the end of the break.
+    local list = entries()
+    local delay, grace = 53, 180
+    local function ended_at(wall)
+        return core.block_ended(feed_as_of(list, wall), wall - delay, grace)
+    end
+    assert_eq(ended_at(INTERPOLIS_STOP + delay + 1), false, "trigger just heard")
+    assert_eq(ended_at(INTERPOLIS_STOP + delay + 10), false, "untitled entry after the trigger")
+    assert_eq(ended_at(INTERPOLIS_STOP + delay + 60), false, "in the middle of the 71 s entry")
+    assert_eq(ended_at(SUPERSONIC_START + FEED_LAG - 1), false, "jingles, song not published yet")
+    assert_eq(ended_at(SUPERSONIC_START + FEED_LAG), true, "song published: 3 s before it is heard")
+    -- The grace period starts at the last spot and outlasts the whole measured tail.
+    assert_eq(INTERPOLIS_STOP + core.SPOT_MARGIN + grace > SUPERSONIC_START, true, "grace covers the tail")
 end)
 
 test("fade_plan gives ~120 ms steps, at least two", function()
