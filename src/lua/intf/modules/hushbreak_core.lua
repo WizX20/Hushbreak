@@ -321,21 +321,46 @@ function M.parse_marker(line)
     return action:lower(), tonumber(at)
 end
 
+-- A calibration mark is read within a second while the interface runs, but one left
+-- behind while it was not running (the extension allows that) is read at the next
+-- start, hours later. Older than this and it is ignored.
+M.MARKER_MAX_AGE = 60
+
+-- A delay outside this range is not a listener's lag but a mark against the wrong
+-- block: the stream leaves the server ~47 s behind cue time, VLC adds seconds, drift
+-- minutes.
+M.DELAY_MIN, M.DELAY_MAX = 20, 600
+
 --- The delay implied by a calibration mark: at epoch `at` the listener heard the
 -- first commercial of the block ("start") or the first song after it ("end" - the
 -- station's own commercials and jingles follow Triton's last spot, so the song is the
--- audible end of the break). Nil when the feed has nothing to compare against.
-function M.calibrated_delay(entries, action, at)
+-- audible end of the break). `now` is the time the mark is read. Nil and a reason when
+-- the mark is stale, the feed has nothing to compare against, or the result is not a
+-- plausible delay.
+function M.calibrated_delay(entries, action, at, now)
+    if now and math.abs(now - at) > M.MARKER_MAX_AGE then
+        return nil, string.format("the mark is %.0f s old", now - at)
+    end
     local mark
     if action == "start" then
         mark = M.block_start(entries)
+        if not mark then
+            return nil, "the feed shows no ad block yet"
+        end
     elseif action == "end" then
         mark = M.song_after_spots(entries)
+        if not mark then
+            return nil, "the feed shows no song after an ad block yet; try again in a few seconds"
+        end
+    else
+        return nil, "unknown mark '" .. tostring(action) .. "'"
     end
-    if not mark then
-        return nil
+    local delay = math.floor(at - mark + 0.5)
+    if delay < M.DELAY_MIN or delay > M.DELAY_MAX then
+        return nil, string.format("%.0f s is not a plausible delay (%d..%d s); was that the right block?",
+            delay, M.DELAY_MIN, M.DELAY_MAX)
     end
-    return math.floor(at - mark + 0.5)
+    return delay
 end
 
 return M
