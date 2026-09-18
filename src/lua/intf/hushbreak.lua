@@ -20,8 +20,13 @@ Settings: vlc --extraintf luaintf --lua-intf hushbreak \
   delay         seconds a freshly connected VLC lags behind the feed's cue times
                 (53 for KINK: 47 s stream buffer + ~6 s VLC buffer)
   feed_lag      seconds between an entry's cue start and its appearance in the feed (50)
-  grace         seconds to stay ducked after the last known spot when the feed has not
-                confirmed the end of the block (8)
+  grace         seconds to stay ducked after the last known spot when the feed has
+                confirmed neither the end of the block nor a song (120). Breaks can
+                hold untitled promo segments between two runs of spots and the feed
+                server stalls for seconds at a time; a long grace keeps the volume
+                from pumping in the middle of the commercials.
+  fade_down     seconds for the fade at the start of a break (0.7)
+  fade_up       seconds for the fade back up when the break is over (3)
   retry         seconds between polls while the feed is late (2)
   idle          longest pause between polls (60)
   mount         Triton mount name; derived from the stream URL when omitted
@@ -40,7 +45,9 @@ local settings = {
     min_volume = 0,
     delay = 53,
     feed_lag = 50,
-    grace = 8,
+    grace = 120,
+    fade_down = 0.7,
+    fade_up = 3,
     retry = 2,
     idle = 60,
     mount = nil,
@@ -52,7 +59,6 @@ for key, value in pairs(config or {}) do
 end
 
 local MARKER_FILE = vlc.config.userdatadir() .. "/hushbreak-marker.txt"
-local FADE_STEPS, FADE_STEP_SECONDS = 6, 0.12
 
 local function log(fmt, ...)
     vlc.msg.info("[hushbreak] " .. string.format(fmt, ...))
@@ -122,11 +128,12 @@ local function set_volume(level)
     vlc.volume.set(level)
 end
 
-local function fade(from, to)
-    for _, level in ipairs(core.fade_steps(from, to, FADE_STEPS)) do
+local function fade(from, to, seconds)
+    local steps, pause = core.fade_plan(seconds)
+    for i, level in ipairs(core.fade_steps(from, to, steps)) do
         set_volume(level)
-        if level ~= to then
-            sleep(FADE_STEP_SECONDS)
+        if i < steps then
+            sleep(pause)
         end
     end
 end
@@ -241,14 +248,14 @@ while true do
         if spot and not ducked then
             normal_volume = volume
             low_volume = core.ducked_volume(normal_volume, settings.duck_percent, settings.min_volume)
-            fade(normal_volume, low_volume)
+            fade(normal_volume, low_volume, settings.fade_down)
             ducked = true
             log("ad break: volume %d -> %d (%s)", normal_volume, low_volume, spot.title)
         elseif spot and ducked and spot.title ~= last_title then
             log("  next spot: %s", spot.title)
         elseif ducked and core.block_ended(entries, stream_now, settings.grace) then
             if volume == low_volume then
-                fade(low_volume, normal_volume)
+                fade(low_volume, normal_volume, settings.fade_up)
                 log("ad break over: volume back to %d", normal_volume)
             else
                 log("ad break over: volume was changed by hand (%d), leaving it", volume)

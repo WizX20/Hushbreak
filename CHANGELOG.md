@@ -6,6 +6,14 @@ Write new entries under **Unreleased** — the Release workflow stamps the versi
 
 ## [Unreleased]
 
+### Fixed
+
+- fix: the volume no longer comes back up in the middle of a break. Un-ducking now needs certainty — the feed's end-of-block trigger or a titled song after the last spot — and otherwise waits a long grace period (`grace`, now 120 s instead of 8): a stalled feed or an untitled promo segment between two runs of spots used to pump the volume up and down
+
+### Changed
+
+- feat: separate fade times, `fade_down` (0.7 s) at the start of a break and a slower `fade_up` (3 s) at the end
+
 ## [0.1.0] - 2026-09-18
 
 ### Added

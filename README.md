@@ -100,7 +100,9 @@ In the preferences the same text, `hushbreak={duck_percent=80,min_volume=10}`, g
 | `min_volume` | `0` | Floor for the ducked volume, in percent of full volume. With `min_volume=25` an ad never plays below 25 %, whatever `duck_percent` says. |
 | `delay` | `53` | Seconds a *freshly connected* VLC lags behind the feed's cue times. Measured for KINK: the stream leaves the server 47 s behind the cue times (Triton buffers for the ad insertion) plus ~6 s of VLC buffering. See *Calibration*. |
 | `feed_lag` | `50` | Seconds between an entry's cue start and its appearance in the feed. Used to time the polls. |
-| `grace` | `8` | Seconds to stay ducked after the last known spot when the feed has not confirmed the end of the block yet. Avoids pumping the volume when a poll fails. |
+| `grace` | `120` | Seconds to stay ducked after the last known spot when the feed has confirmed neither the end of the block nor a song. Breaks can hold untitled promo segments between two runs of spots, and the feed server stalls for seconds at a time; a long grace keeps the volume from pumping in the middle of the commercials. |
+| `fade_down` | `0.7` | Seconds for the fade at the start of a break. |
+| `fade_up` | `3` | Seconds for the fade back up when the break is over. |
 | `retry` | `2` | Seconds between polls while the feed is late with the next entry. |
 | `idle` | `60` | Longest pause between polls. |
 | `mount` | *(auto)* | Triton mount name, e.g. `KINK`. Derived from the stream URL (`.../KINK_SC`) when omitted. |
@@ -121,7 +123,8 @@ For a different station the base `delay` may differ; calibrate once and pass the
 ## How it works
 
 - Every entry in the feed (song, jingle, spot, "commercial insert" trigger) has a start and a duration, so Hushbreak knows when the current entry ends and polls just after that moment instead of on a fixed interval — once per song, once per spot. Ad blocks are made of contiguous spots; the *insert* trigger sits exactly at the end of a block and serves as the end marker.
-- Volume goes down and up in a short fade (six steps, ~0.7 s). If you change the volume yourself during a break, Hushbreak leaves it where you put it.
+- The volume goes back up only when the end of the break is certain: the feed shows the *insert* trigger, or a titled song has started after the last spot (jingles, news and promos carry no title). Without either, Hushbreak stays ducked for `grace` seconds — a song that stays soft a little longer after a missed marker beats the volume pumping up and down in the middle of the commercials.
+- Volume goes down in a short fade (`fade_down`, 0.7 s) and comes back up in a slower one (`fade_up`, 3 s). If you change the volume yourself during a break, Hushbreak leaves it where you put it.
 - The pure logic lives in `hushbreak_core.lua` and is covered by the test suite against a real feed answer; `hushbreak.lua` is the thin VLC layer around it. [DEVGUIDE.md](DEVGUIDE.md) has the details, including the measurements this is built on.
 
 ## Credits

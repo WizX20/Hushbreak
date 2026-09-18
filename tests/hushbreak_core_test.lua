@@ -71,15 +71,44 @@ test("last_spot_end and the end marker", function()
     assert_eq(core.has_end_marker({}), false)
 end)
 
-test("block_ended waits for the marker or the grace period", function()
+local function without_titled_tracks(list)
+    local kept = {}
+    for _, e in ipairs(list) do
+        if not (e.kind == "track" and e.title ~= "") then
+            kept[#kept + 1] = e
+        end
+    end
+    return kept
+end
+
+test("song_started_after_spots sees titled tracks only", function()
     local list = entries()
-    local grace = 8
+    assert_eq(core.song_started_after_spots(list), true, "Supersonic follows the block")
+    assert_eq(core.song_started_after_spots(without_titled_tracks(list)), false, "untitled tracks do not count")
+    assert_eq(core.song_started_after_spots({}), false)
+end)
+
+test("block_ended needs the marker, a song, or a long grace period", function()
+    local list = entries()
+    local grace = 120
     assert_eq(core.block_ended(list, INTERPOLIS_START + 5, grace), false, "spot still playing")
     assert_eq(core.block_ended(list, INTERPOLIS_STOP + 1, grace), true, "marker known")
-    local unconfirmed = without_insert(list)
-    assert_eq(core.block_ended(unconfirmed, INTERPOLIS_STOP + 1, grace), false, "within grace")
+    local no_marker = without_insert(list)
+    assert_eq(core.block_ended(no_marker, INTERPOLIS_STOP + 1, grace), true, "no marker, but a song started")
+    local unconfirmed = without_titled_tracks(no_marker)
+    assert_eq(core.block_ended(unconfirmed, INTERPOLIS_STOP + 1, grace), false, "nothing certain: within grace")
+    assert_eq(core.block_ended(unconfirmed, INTERPOLIS_STOP + 100, grace), false, "a stalled feed does not un-duck")
     assert_eq(core.block_ended(unconfirmed, INTERPOLIS_STOP + 0.5 + grace + 0.1, grace), true, "past grace")
     assert_eq(core.block_ended({}, 0, grace), true, "nothing known")
+end)
+
+test("fade_plan gives ~120 ms steps, at least two", function()
+    local steps, pause = core.fade_plan(3)
+    assert_eq(steps, 25)
+    assert_near(pause, 0.12, 0.001)
+    steps, pause = core.fade_plan(0.1)
+    assert_eq(steps, 2)
+    assert_near(pause, 0.05, 0.001)
 end)
 
 test("block_start walks back over contiguous spots", function()
