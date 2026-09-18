@@ -4,8 +4,8 @@ name: Release
 # A scheduled run releases only when main moved since the last release, bumping the patch
 # version; for a minor/major bump raise M.VERSION in src/lua/intf/modules/hushbreak_core.lua
 # in a PR (the next release uses it as-is), or dispatch with an explicit version.
-# One run: stamp version + CHANGELOG, lint + test, pack the zip, commit + tag on main,
-# create the GitHub Release with the zip attached.
+# One run: stamp version + CHANGELOG, lint + test, pack the zip, update the Scoop manifest
+# with the zip's hash, commit + tag on main, create the GitHub Release with the zip attached.
 on:
   schedule:
     - cron: "0 6 * * 2"
@@ -150,12 +150,28 @@ jobs:
           "zip=$($r.Zip)" >> $env:GITHUB_OUTPUT
           "hash=$($r.Sha256)" >> $env:GITHUB_OUTPUT
 
+      - name: Update Scoop manifest
+        shell: pwsh
+        run: |
+          $v = $env:VERSION
+          $hash = '${{ steps.pack.outputs.hash }}'
+          $path = 'bucket/hushbreak.json'
+          $j = [IO.File]::ReadAllText($path)
+          # In-place edits keep the file's formatting; the autoupdate url (v$version) is left alone.
+          $j = $j -replace '"version":\s*"[^"]*"', "`"version`": `"$v`""
+          $j = $j -replace '"url":\s*"https://github\.com/WizX20/Hushbreak/releases/download/v\d[^"]*"', "`"url`": `"https://github.com/WizX20/Hushbreak/releases/download/v$v/Hushbreak-$v.zip`""
+          $j = $j -replace '"hash":\s*"[^"]*"', "`"hash`": `"$hash`""
+          [IO.File]::WriteAllText($path, $j, [Text.UTF8Encoding]::new($false))
+          $m = Get-Content $path -Raw | ConvertFrom-Json
+          if ($m.version -ne $v -or $m.hash -ne $hash) { throw 'manifest update did not take' }
+          Get-Content $path
+
       - name: Commit, tag and push
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/lua/intf/modules/hushbreak_core.lua src/lua/extensions/hushbreak_calibrate.lua CHANGELOG.md
+          git add src/lua/intf/modules/hushbreak_core.lua src/lua/extensions/hushbreak_calibrate.lua CHANGELOG.md bucket/hushbreak.json
           git commit -m "chore: release v$VERSION"
           git tag -a "v$VERSION" -m "Hushbreak v$VERSION"
           git push origin main "v$VERSION"

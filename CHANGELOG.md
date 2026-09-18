@@ -14,3 +14,4 @@ Write new entries under **Unreleased** — the Release workflow stamps the versi
 - feat: measures VLC's accumulated lag (stalls, pauses) from its playback position and compensates; restarts the stream at startup so the lag starts from a known value
 - feat: `Hushbreak calibration` extension (View menu) with *Ad block starts/ends now* and *Reconnect stream* buttons
 - feat: `scripts/install.ps1` / `task install` to copy the scripts into VLC's per-user Lua folder
+- feat: Scoop install on Windows — this repo doubles as its own bucket (`scoop bucket add hushbreak https://github.com/WizX20/Hushbreak; scoop install hushbreak`)

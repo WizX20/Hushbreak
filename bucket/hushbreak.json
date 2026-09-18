@@ -1,0 +1,37 @@
+{
+  "version": "0.1.0",
+  "description": "Hushbreak - VLC add-on that hushes the ad breaks on Triton/StreamTheWorld radio streams such as KINK.",
+  "homepage": "https://github.com/WizX20/Hushbreak",
+  "license": "BUSL-1.1",
+  "url": "https://github.com/WizX20/Hushbreak/releases/download/v0.1.0/Hushbreak-0.1.0.zip",
+  "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "post_install": [
+    "# VLC only loads scripts from its own Lua folders; copy them there (per user, no admin rights).",
+    "$vlcLua = Join-Path $env:APPDATA 'vlc\\lua'",
+    "foreach ($f in 'intf\\hushbreak.lua', 'intf\\modules\\hushbreak_core.lua', 'extensions\\hushbreak_calibrate.lua') {",
+    "    $target = Join-Path $vlcLua $f",
+    "    New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent) | Out-Null",
+    "    Copy-Item -LiteralPath (Join-Path $dir \"lua\\$f\") -Destination $target -Force",
+    "}",
+    "Write-Host \"Hushbreak scripts copied into $vlcLua - restart VLC if it is running.\""
+  ],
+  "post_uninstall": [
+    "$vlcLua = Join-Path $env:APPDATA 'vlc\\lua'",
+    "foreach ($f in 'intf\\hushbreak.lua', 'intf\\modules\\hushbreak_core.lua', 'extensions\\hushbreak_calibrate.lua') {",
+    "    Remove-Item -LiteralPath (Join-Path $vlcLua $f) -Force -ErrorAction SilentlyContinue",
+    "}",
+    "Write-Host \"Hushbreak scripts removed from $vlcLua. VLC's own preferences (Extra interface modules / Lua interface) are left as they are.\""
+  ],
+  "checkver": "github",
+  "autoupdate": {
+    "url": "https://github.com/WizX20/Hushbreak/releases/download/v$version/Hushbreak-$version.zip"
+  },
+  "notes": [
+    "Tell VLC to run Hushbreak, once, in Tools > Preferences (Show settings: All):",
+    "  Interface > Main interfaces > Extra interface modules: luaintf",
+    "  Interface > Main interfaces > Lua > Lua interface: hushbreak",
+    "or start VLC with: vlc --extraintf luaintf --lua-intf hushbreak <stream.pls>",
+    "Settings (optional) go in Lua > Lua interface configuration, e.g. hushbreak={duck_percent=60,min_volume=10}",
+    "Watch it work in Tools > Messages (verbosity 2, filter 'hushbreak')."
+  ]
+}

@@ -132,10 +132,15 @@ Then the `release` job:
 5. **Stamp** — `scripts/set-version.ps1` writes the version into `hushbreak_core.lua` and the extension's descriptor; `scripts/cut-changelog.ps1 -FallbackFromGit` turns `## [Unreleased]` into `## [x.y.z] - <date>` and extracts that section as the release notes. An empty section is filled from the commit subjects since the last tag, so write readable subjects even when you skip the changelog.
 6. **Lint + test** the stamped sources on Lua 5.1.
 7. **Pack** — `scripts/pack.ps1` builds `dist/Hushbreak-x.y.z.zip` (`lua/` tree plus `LICENSE`, `NOTICE`, `README.md`) and prints its SHA256.
-8. **Commit + tag** `chore: release vx.y.z` on `main` (as `github-actions[bot]`), push with the `vx.y.z` tag.
-9. **GitHub Release** `vx.y.z` with the zip attached, the changelog section and the SHA256 as body.
+8. **Bump the bucket** — `bucket/hushbreak.json` gets the new `version`, `url` and `hash`, edited in place.
+9. **Commit + tag** `chore: release vx.y.z` on `main` (as `github-actions[bot]`), push with the `vx.y.z` tag.
+10. **GitHub Release** `vx.y.z` with the zip attached, the changelog section and the SHA256 as body.
 
-If step 9 fails after step 8 pushed, create the release by hand with `git gh release create vx.y.z dist/Hushbreak-x.y.z.zip` from a fresh checkout of the tag — the tag check in step 3 refuses a re-run.
+If step 10 fails after step 9 pushed, create the release by hand with `git gh release create vx.y.z dist/Hushbreak-x.y.z.zip` from a fresh checkout of the tag — the tag check in step 3 refuses a re-run.
+
+### First release
+
+`bucket/hushbreak.json` ships with a placeholder hash until the first release has run; `scoop install hushbreak` fails with a hash mismatch before that. Run `task release` once the repo is on GitHub and CI is green — it ships the sources' `0.1.0`.
 
 ### Required secret: `HUSHBREAK_RELEASE_TOKEN`
 
@@ -149,6 +154,21 @@ The `check` job fails early with a clear message when the secret is missing. CI'
 ### Branch rules (ruleset `main`)
 
 Managed on GitHub (**Settings → Rules → Rulesets → main**) and by `task github-settings`. Pull request required, `squash` the only merge method, required checks `lint + test (Lua 5.1)`, `pack release zip` and `release token expiry`, deletion and force-push blocked; bypass list: repository admin only. Direct pushes to `main` are therefore impossible for everyone but the owner, and a PR cannot be squash-merged before CI is green.
+
+### Repo visibility
+
+Scoop fetches release assets over unauthenticated HTTPS. `WizX20/Hushbreak` must stay **public** for `scoop install` to work.
+
+## Scoop bucket maintenance
+
+- Manifest: `bucket/hushbreak.json`. The release workflow bumps `version`/`url`/`hash`; `checkver: github` + `autoupdate` let `scoop update` find new releases.
+- Users subscribe to the bucket straight from this repo: `scoop bucket add hushbreak https://github.com/WizX20/Hushbreak`. The bucket name is a local alias for the repo URL — Scoop keys buckets by that alias, one repo each, so this project needs its own alias next to `psworktree` and ActionsMonitor's `wizx20`. A shared `WizX20/scoop-bucket` is tracked in PSWorktree #8; until then, per-repo buckets keep each release self-contained.
+- Scoop unpacks the zip into `~/scoop/apps/hushbreak/current` (the `lua/` tree, LICENSE, NOTICE, README) and `post_install` copies the three scripts into `%APPDATA%lc\lua\`, because VLC only loads scripts from its own folders. `post_install` also runs on `scoop update`, so an update refreshes the copies; `post_uninstall` deletes them and leaves VLC's preferences alone.
+- To try a manifest change before a release, test the hook script on its own: load `bucket/hushbreak.json`, `[scriptblock]::Create($m.post_install -join "`r`n")`, and invoke it with `$dir` set to a folder that holds a `lua/` tree.
+
+## winget
+
+Not yet. winget has no notion of VLC add-ons; publishing means wrapping the scripts in an installer that copies them into `%APPDATA%lc\lua`. Tracked in issue #4 — the README says so.
 
 ## Conventions
 
