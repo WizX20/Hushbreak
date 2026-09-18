@@ -106,10 +106,30 @@ function M.has_end_marker(entries)
     return false
 end
 
---- Whether ducking should stop: no spot is active, and either the feed confirmed the
--- end of the block or `grace` seconds have passed since the last known spot without
--- news. The next spot is published only ~3 s before it is heard, so a missed poll must
--- not pump the volume up and down: staying ducked a little longer is the safer error.
+--- True when a titled track (a real song; jingles, news and promos carry no title)
+-- started at or after the last known spot. Programme has resumed, whatever the feed
+-- says about markers.
+function M.song_started_after_spots(entries)
+    local last = M.last_spot_end(entries)
+    if not last then
+        return false
+    end
+    for _, e in ipairs(entries) do
+        if e.kind == "track" and e.title ~= "" and e.start >= last - 1.5 then
+            return true
+        end
+    end
+    return false
+end
+
+--- Whether ducking should stop. Only when the end of the break is certain: no spot is
+-- active, and the feed shows either the end-of-block trigger or a titled song after the
+-- last spot. Without either, stay ducked until `grace` seconds have passed since the
+-- last known spot. The next spot is published only ~3 s before it is heard, the feed
+-- server stalls for seconds at a time, and a break can hold untitled promo or sponsor
+-- segments between two runs of spots - so the grace period is long, and a song that
+-- stays ducked a little longer after a missed marker is the safer error than the
+-- volume pumping up and down in the middle of the commercials.
 function M.block_ended(entries, stream_now, grace)
     if M.active_spot(entries, stream_now) then
         return false
@@ -118,7 +138,10 @@ function M.block_ended(entries, stream_now, grace)
     if not last then
         return true
     end
-    return M.has_end_marker(entries) or stream_now >= last + M.SPOT_MARGIN + grace
+    if M.has_end_marker(entries) or M.song_started_after_spots(entries) then
+        return true
+    end
+    return stream_now >= last + M.SPOT_MARGIN + grace
 end
 
 --- Start (cue time) of the ad block containing the newest spot: walk back while the
@@ -158,6 +181,13 @@ function M.fade_steps(from, to, steps)
         levels[i] = math.floor(from + (to - from) * i / steps + 0.5)
     end
     return levels
+end
+
+--- Number of steps and the pause between them for a fade that lasts `seconds`:
+-- steps of about 120 ms, at least two.
+function M.fade_plan(seconds)
+    local steps = math.max(2, math.floor(seconds / 0.12 + 0.5))
+    return steps, seconds / steps
 end
 
 -- Scheduling -----------------------------------------------------------------------
