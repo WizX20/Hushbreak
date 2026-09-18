@@ -73,7 +73,7 @@ $labels = @(
     @{ name = 'triage'; color = 'd4c5f9'; description = 'Needs a first look: not yet a bug or a feature' },
     @{ name = 'wontfix'; color = 'ffffff'; description = 'This will not be worked on' }
 )
-$existing = @(Invoke-Gh @('--paginate', "repos/$Repo/labels", '--jq', '.[].name'))
+$existing = @(Invoke-Gh @('--paginate', "repos/$Repo/labels", '--jq', 'map(.name) | .[]'))
 foreach ($label in $labels) {
     if ($existing -contains $label.name) {
         $encoded = [uri]::EscapeDataString($label.name)
