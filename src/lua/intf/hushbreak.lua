@@ -198,13 +198,29 @@ local entries = {}
 local next_poll_at = 0
 local ducked, normal_volume, low_volume, last_title = false, 0, 0, ""
 
+-- Bring the volume back up after a break, over `seconds`, unless it was changed by
+-- hand meanwhile; then forget the ducked state.
+local function unduck(reason, seconds)
+    local volume = math.floor((vlc.volume.get() or 0) + 0.5)
+    if volume == low_volume then
+        fade(low_volume, normal_volume, seconds)
+        log("%s: volume back to %d", reason, normal_volume)
+    else
+        log("%s: volume was changed by hand (%d), leaving it", reason, volume)
+    end
+    ducked = false
+end
+
 -- Main loop -------------------------------------------------------------------------
 
 while true do
     local position = input_position()
     if not position then
-        -- Nothing playing: forget any ducked state, the next input starts clean.
-        ducked = false
+        -- Nothing playing. VLC's volume outlives the input, so a ducked level would
+        -- carry over into the next input and the next break would duck from there.
+        if ducked then
+            unduck("input gone during an ad break", 0)
+        end
         sleep(1)
     else
         local now = os.time()
@@ -261,13 +277,7 @@ while true do
         elseif spot and ducked and spot.title ~= last_title then
             log("  next spot: %s", spot.title)
         elseif ducked and core.block_ended(entries, stream_now, settings.grace, settings.fade_up) then
-            if volume == low_volume then
-                fade(low_volume, normal_volume, settings.fade_up)
-                log("ad break over: volume back to %d", normal_volume)
-            else
-                log("ad break over: volume was changed by hand (%d), leaving it", volume)
-            end
-            ducked = false
+            unduck("ad break over", settings.fade_up)
         end
         last_title = spot and spot.title or ""
 
