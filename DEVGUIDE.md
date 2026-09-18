@@ -42,6 +42,11 @@ $feed = "file:///C:/Repos/GitHub/Hushbreak/tests/fixtures/feed-kink.xml"
 
 Within a second the log shows `ad break: volume 256 -> 102 (BEEQUIP FINAL)`, then `next spot: KV WK38 ALWAYS`, `next spot: INTERPOLIS GRIPOPCYBER`, and 111 s after the last spot `ad break over: volume back to 256` — the fixture carries the song after the block (Supersonic, 114 s after the last spot), and the fade-up starts `fade_up` seconds before the listener reaches it. `--aout amem` keeps it silent, `--no-one-instance` keeps it away from the VLC you listen with. Stop it by its own PID; never kill every `vlc` process, the listener's VLC is one of them.
 
+Two things to know about that instance:
+
+- **It shares the volume Windows remembers for `vlc.exe`.** A fresh VLC starts at the level the previous one left, so a test instance killed while ducked hands that level to the listener's next VLC start. Put the volume back before you stop it, and prefer quitting over killing.
+- **The log is written in ~64 KB chunks**, so it cannot be tailed live and a killed instance loses the tail. Add `--extraintf luaintf:oldrc --rc-host 127.0.0.1:4212` and drive it over TCP instead: `volume` shows the level, `volume 97` sets it, `stop` / `play` take the input away and bring it back (how #8 was reproduced), `quit` flushes the log and exits. Keep the socket open between commands; the RC interface drops a line whose connection closes right away.
+
 ## Tests and lint
 
 ```powershell
