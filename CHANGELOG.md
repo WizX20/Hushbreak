@@ -6,6 +6,8 @@ Write new entries under **Unreleased** — the Release workflow stamps the versi
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-18
+
 ### Fixed
 
 - fix: the volume no longer comes back up in the middle of a break. Un-ducking now needs certainty — the feed's end-of-block trigger or a titled song after the last spot — and otherwise waits a long grace period (`grace`, now 120 s instead of 8): a stalled feed or an untitled promo segment between two runs of spots used to pump the volume up and down

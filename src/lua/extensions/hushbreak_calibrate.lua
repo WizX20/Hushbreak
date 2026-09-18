@@ -14,7 +14,7 @@ local dialog, status
 function descriptor()
     return {
         title = "Hushbreak calibration",
-        version = "0.1.0",
+        version = "0.1.1",
         author = "WizX20",
         url = "https://github.com/WizX20/Hushbreak",
         shortdesc = "Hushbreak calibration",
