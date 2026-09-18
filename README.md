@@ -29,6 +29,19 @@ This project is licensed under the [Business Source License 1.1](LICENSE) (BUSL-
 
 ## Install
 
+### Windows — Scoop (recommended)
+
+```powershell
+scoop bucket add hushbreak https://github.com/WizX20/Hushbreak
+scoop install hushbreak
+```
+
+(This repo doubles as its own Scoop bucket. The first `hushbreak` is just the local name you give that bucket; the second is the app, from `bucket/hushbreak.json`.) The install copies the three scripts into `%APPDATA%\vlc\lua\`; `scoop update hushbreak` refreshes them and `scoop uninstall hushbreak` removes them again. Then tell VLC to run Hushbreak, once — see *Run* below.
+
+winget: later, see [#4](https://github.com/WizX20/Hushbreak/issues/4).
+
+### Manual (any OS)
+
 1. Download `Hushbreak-<version>.zip` from the [latest release](https://github.com/WizX20/Hushbreak/releases/latest).
 2. Unpack it into VLC's per-user data folder so that the `lua` folder inside the zip lands next to `vlcrc`:
    - Windows: `%APPDATA%\vlc\` (paste that into Explorer's address bar)
