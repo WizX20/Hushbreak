@@ -1,6 +1,7 @@
 -- Tests for src/lua/intf/modules/hushbreak_core.lua. Run with `lua tests/run.lua`.
 -- The fixture is a real answer of Triton's now-playing feed for KINK (2026-09-18,
--- 14 entries): four ad spots, the end-of-block trigger, and a run of tracks.
+-- 14 entries): four ad spots, the "commercial insert" trigger, ~80 s of untitled entries
+-- (heard as commercials), four jingles, and two songs.
 
 local core = require("hushbreak_core")
 
@@ -9,8 +10,11 @@ local FEED = read_fixture("feed-kink.xml")
 -- Cue times (epoch seconds) of the fixture's ad block.
 local KPN_START = 1789729173.912
 local INTERPOLIS_START = 1789729223.546
-local INTERPOLIS_STOP = 1789729248.546 -- + 25 s
+local INTERPOLIS_STOP = 1789729248.546 -- + 25 s; the insert trigger sits here
+local SUPERSONIC_START = 1789729362.509 -- first titled song after the block
 local BAD_DECISIONS_STOP = 1789729637.435 + 280.322
+local FEED_LAG = 50
+local WINDOW = 8 -- numberToFetch of the live feed URL
 
 local function entries()
     return core.parse_feed(FEED)
@@ -62,13 +66,11 @@ test("active_spot finds the spot playing at a cue time", function()
     assert_eq(core.active_spot(list, KPN_START - 1), nil)
 end)
 
-test("last_spot_end and the end marker", function()
+test("last_spot_end is the end of the newest spot", function()
     local list = entries()
     assert_near(core.last_spot_end(list), INTERPOLIS_STOP, 0.001)
-    assert_eq(core.has_end_marker(list), true)
-    assert_eq(core.has_end_marker(without_insert(list)), false)
+    assert_near(core.last_spot_end(without_insert(list)), INTERPOLIS_STOP, 0.001, "the trigger is not a spot")
     assert_eq(core.last_spot_end({}), nil)
-    assert_eq(core.has_end_marker({}), false)
 end)
 
 local function without_titled_tracks(list)
@@ -81,25 +83,125 @@ local function without_titled_tracks(list)
     return kept
 end
 
-test("song_started_after_spots sees titled tracks only", function()
+test("song_after_spots is the first titled track after the block", function()
     local list = entries()
-    assert_eq(core.song_started_after_spots(list), true, "Supersonic follows the block")
-    assert_eq(core.song_started_after_spots(without_titled_tracks(list)), false, "untitled tracks do not count")
-    assert_eq(core.song_started_after_spots({}), false)
+    assert_near(core.song_after_spots(list), SUPERSONIC_START, 0.001, "Supersonic, not Bad Decisions")
+    assert_eq(core.song_after_spots(without_titled_tracks(list)), nil, "untitled tracks do not count")
+    assert_eq(core.song_after_spots({}), nil)
 end)
 
-test("block_ended needs the marker, a song, or a long grace period", function()
+test("block_ended needs the song after the last spot to be heard, or a long grace period", function()
     local list = entries()
-    local grace = 120
-    assert_eq(core.block_ended(list, INTERPOLIS_START + 5, grace), false, "spot still playing")
-    assert_eq(core.block_ended(list, INTERPOLIS_STOP + 1, grace), true, "marker known")
-    local no_marker = without_insert(list)
-    assert_eq(core.block_ended(no_marker, INTERPOLIS_STOP + 1, grace), true, "no marker, but a song started")
-    local unconfirmed = without_titled_tracks(no_marker)
-    assert_eq(core.block_ended(unconfirmed, INTERPOLIS_STOP + 1, grace), false, "nothing certain: within grace")
+    local grace, lead = 180, 3
+    assert_eq(core.block_ended(list, INTERPOLIS_START + 5, grace, lead), false, "spot still playing")
+    assert_eq(core.block_ended(list, INTERPOLIS_STOP + 1, grace, lead), false, "song known but not reached")
+    assert_eq(core.block_ended(list, SUPERSONIC_START - lead - 0.1, grace, lead), false, "just before the lead")
+    assert_eq(core.block_ended(list, SUPERSONIC_START - lead, grace, lead), true,
+        "the fade-up starts `lead` before the song")
+    assert_eq(core.block_ended(list, SUPERSONIC_START, grace), true, "no lead: at the song")
+    assert_eq(core.block_ended(without_insert(list), SUPERSONIC_START, grace), true, "the trigger is not needed")
+    local unconfirmed = without_titled_tracks(list)
+    assert_eq(core.block_ended(unconfirmed, INTERPOLIS_STOP + 1, grace), false, "the trigger alone is not enough")
     assert_eq(core.block_ended(unconfirmed, INTERPOLIS_STOP + 100, grace), false, "a stalled feed does not un-duck")
     assert_eq(core.block_ended(unconfirmed, INTERPOLIS_STOP + 0.5 + grace + 0.1, grace), true, "past grace")
     assert_eq(core.block_ended({}, 0, grace), true, "nothing known")
+end)
+
+test("merge_entries keeps old entries, prefers fresh ones and prunes past the horizon", function()
+    local list = entries()
+    local older, newer = {}, {}
+    for i, e in ipairs(list) do
+        if i > 6 then older[#older + 1] = e end
+        if i <= 8 then newer[#newer + 1] = e end
+    end
+    local merged = core.merge_entries(older, newer, 0)
+    assert_eq(#merged, 14, "union")
+    assert_eq(merged[1].title, "Bad Decisions", "newest first")
+    assert_eq(merged[14].title, "KPN RDS EXTRA RC OLR OMRUIL")
+    local corrected = {
+        { kind = "ad", ad_type = "break", start = list[11].start, stop = list[11].stop + 5, title = "x" },
+    }
+    assert_near(core.merge_entries(list, corrected, 0)[11].stop, list[11].stop + 5, 0.001, "fresh entry wins")
+    assert_eq(#core.merge_entries(list, {}, INTERPOLIS_STOP + 1), 9, "spots pruned past the horizon")
+    assert_eq(#core.merge_entries({}, {}, 0), 0)
+end)
+
+-- The feed as it looked at wall-clock time `at`: an entry appears `FEED_LAG` seconds
+-- after its cue start, and only the newest `WINDOW` entries are served.
+local function feed_as_of(list, at)
+    local seen = {}
+    for _, e in ipairs(list) do
+        if e.start + FEED_LAG <= at and #seen < WINDOW then
+            seen[#seen + 1] = e
+        end
+    end
+    return seen
+end
+
+-- Replays a block the way the interface script sees it: a listener `delay` seconds
+-- behind cue time, polling every second and merging each answer into what it kept.
+-- Returns the wall-clock time at which block_ended first turns true.
+local function replay_until_ended(list, delay, grace, lead)
+    local kept = {}
+    for wall = KPN_START + delay, BAD_DECISIONS_STOP + delay do
+        local stream_now = wall - delay
+        kept = core.merge_entries(kept, feed_as_of(list, wall), stream_now - grace - 60)
+        if core.block_ended(kept, stream_now, grace, lead) then
+            return wall
+        end
+    end
+    return nil
+end
+
+test("the insert trigger does not end the break: commercials go on after it", function()
+    -- After the last spot the feed shows the trigger, an untitled 8 s entry, an untitled
+    -- 71 s entry and four jingles before the first titled song; the volume came up
+    -- ~1 minute early when the trigger counted as the end of the break.
+    local list = entries()
+    local delay, grace, lead = 53, 180, 3
+    local function ended_at(wall)
+        return core.block_ended(feed_as_of(list, wall), wall - delay, grace, lead)
+    end
+    assert_eq(ended_at(INTERPOLIS_STOP + delay + 1), false, "trigger just heard")
+    assert_eq(ended_at(INTERPOLIS_STOP + delay + 10), false, "untitled entry after the trigger")
+    assert_eq(ended_at(INTERPOLIS_STOP + delay + 60), false, "in the middle of the 71 s entry")
+    assert_eq(ended_at(SUPERSONIC_START + FEED_LAG - 1), false, "jingles, song not published yet")
+    -- The grace period starts at the last spot and outlasts the whole measured tail.
+    assert_eq(INTERPOLIS_STOP + core.SPOT_MARGIN + grace > SUPERSONIC_START, true, "grace covers the tail")
+end)
+
+test("the fade-up lands on the song for any delay, not on the song's publication", function()
+    local list = entries()
+    local grace, lead = 180, 3
+    -- The song is published at cue + 50; a listener 53 s behind hears it 3 s later, one
+    -- 80 s behind (VLC drift) 30 s later. Un-ducking at publication is early by that much.
+    assert_near(replay_until_ended(list, 53, grace, lead), SUPERSONIC_START + 53 - lead, 1, "fresh VLC")
+    assert_near(replay_until_ended(list, 80, grace, lead), SUPERSONIC_START + 80 - lead, 1, "drifted VLC")
+    assert_near(replay_until_ended(list, 120, grace, lead), SUPERSONIC_START + 120 - lead, 1, "far behind")
+end)
+
+test("spots that scroll out of the feed window are remembered until the song", function()
+    -- One more untitled entry in the tail and the block's spots have left the 8-entry
+    -- window before the song is published; without the kept history block_ended would
+    -- see no spots at all and un-duck in the middle of the jingles.
+    local list = entries()
+    local tail = {}
+    for _, e in ipairs(list) do
+        if e.title == "Supersonic" then
+            tail[#tail + 1] = { kind = "track", ad_type = nil, start = e.start, stop = e.start + 10, title = "" }
+            tail[#tail + 1] = { kind = "track", ad_type = nil, start = e.start + 10, stop = e.stop, title = e.title }
+        else
+            tail[#tail + 1] = e
+        end
+    end
+    table.sort(tail, function(a, b) return a.start > b.start end)
+    local song = SUPERSONIC_START + 10
+    local delay, grace, lead = 53, 180, 3
+    local at_publication = feed_as_of(tail, song + FEED_LAG - 1)
+    assert_eq(core.last_spot_end(at_publication), nil, "spots have scrolled out of the window")
+    assert_eq(core.block_ended(at_publication, song + FEED_LAG - 1 - delay, grace, lead), true,
+        "the window alone would un-duck now")
+    assert_near(replay_until_ended(tail, delay, grace, lead), song + delay - lead, 1, "kept history waits for the song")
 end)
 
 test("fade_plan gives ~120 ms steps, at least two", function()
@@ -146,13 +248,17 @@ test("next_poll waits for the end of the newest entry plus the feed lag", functi
     assert_eq(core.next_poll({}, 0, lag, retry, idle), idle, "nothing known")
 end)
 
-test("next_transition is the next spot edge in listener time", function()
+test("next_transition is the next spot edge or fade-up point in listener time", function()
     local list = entries()
-    local delay = 53
+    local delay, lead = 53, 3
     assert_near(core.next_transition(list, KPN_START + delay - 5, delay), 5, 0.001, "before the block")
     assert_near(core.next_transition(list, INTERPOLIS_START + delay + 1, delay), 25 - 1 + 0.5, 0.001,
         "end of the last spot")
-    assert_eq(core.next_transition(list, INTERPOLIS_STOP + delay + 10, delay), nil, "all edges passed")
+    assert_near(core.next_transition(list, INTERPOLIS_STOP + delay + 10, delay, lead),
+        SUPERSONIC_START - lead - INTERPOLIS_STOP - 10, 0.001, "the fade-up before the song")
+    assert_eq(core.next_transition(list, SUPERSONIC_START + delay + 1, delay, lead), nil, "all edges passed")
+    assert_eq(core.next_transition(without_titled_tracks(list), INTERPOLIS_STOP + delay + 10, delay, lead), nil,
+        "no song known: nothing to wake up for")
     assert_eq(core.next_transition({}, 0, delay), nil)
 end)
 
@@ -189,10 +295,12 @@ test("parse_marker", function()
     assert_eq(core.parse_marker(nil), nil)
 end)
 
-test("calibrated_delay from a block start or end heard by the listener", function()
+test("calibrated_delay from the first commercial or the first song heard by the listener", function()
     local list = entries()
-    assert_eq(core.calibrated_delay(list, "end", INTERPOLIS_STOP + 53.4), 53)
+    assert_eq(core.calibrated_delay(list, "end", SUPERSONIC_START + 53.4), 53, "'end' is the song, not the last spot")
     assert_eq(core.calibrated_delay(list, "start", KPN_START + 80), 80)
+    assert_eq(core.calibrated_delay(without_titled_tracks(list), "end", SUPERSONIC_START + 53), nil,
+        "song not published yet")
     assert_eq(core.calibrated_delay({}, "end", 0), nil)
     assert_eq(core.calibrated_delay(list, "reconnect", 0), nil)
 end)

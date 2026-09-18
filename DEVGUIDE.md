@@ -10,7 +10,7 @@ src/lua/intf/modules/hushbreak_core.lua    pure logic, no VLC calls; carries M.V
 src/lua/extensions/hushbreak_calibrate.lua VLC extension: three buttons -> marker file
 tests/run.lua                              dependency-free test runner
 tests/hushbreak_core_test.lua              the suite
-tests/fixtures/feed-kink.xml               a real feed answer (KINK, 2026-09-18, 14 entries)
+tests/fixtures/feed-kink.xml               a real feed answer (KINK, 2026-09-18, 14 entries: spots, trigger, station tail, songs)
 scripts/*.ps1                              lint, test, install, pack, set-version, cut-changelog, bootstrap-github
 .github/workflows/ci.yml                   lint + test on Lua 5.1, pack, release-token expiry
 .github/workflows/release.yml              weekly / manual release
@@ -40,7 +40,7 @@ $feed = "file:///C:/Repos/GitHub/Hushbreak/tests/fixtures/feed-kink.xml"
     --no-one-instance --aout amem --verbose 2 --file-logging --logfile hushbreak-test.log KINK.pls
 ```
 
-Within a second the log shows `ad break: volume 256 -> 102 (BEEQUIP FINAL)`, then `next spot: KV WK38 ALWAYS`, `next spot: INTERPOLIS GRIPOPCYBER`, and after the block `ad break over: volume back to 256` — the fixture carries the end marker, so no grace wait. `--aout amem` keeps it silent, `--no-one-instance` keeps it away from the VLC you listen with. Stop it by its own PID; never kill every `vlc` process, the listener's VLC is one of them.
+Within a second the log shows `ad break: volume 256 -> 102 (BEEQUIP FINAL)`, then `next spot: KV WK38 ALWAYS`, `next spot: INTERPOLIS GRIPOPCYBER`, and 111 s after the last spot `ad break over: volume back to 256` — the fixture carries the song after the block (Supersonic, 114 s after the last spot), and the fade-up starts `fade_up` seconds before the listener reaches it. `--aout amem` keeps it silent, `--no-one-instance` keeps it away from the VLC you listen with. Stop it by its own PID; never kill every `vlc` process, the listener's VLC is one of them.
 
 ## Tests and lint
 
@@ -84,7 +84,7 @@ All timing in Hushbreak comes from these; re-measure before changing a default.
 - **The stream is 47.5 s behind cue time.** A raw connection to the stream (`Icy-MetaData: 1`, reading the interleaved `StreamTitle`) shows each song title 47–48 s after the feed's cue time for that song — Triton buffers the stream for its ad insertion. Reader: `python tools/icy_watch.py https://22343.live.streamtheworld.com/KINK_SC` prints every metadata change with the wall-clock time; compare with the feed's `cue_time_start` for the same song.
 - **A fresh VLC hears the stream ~5–6 s after it leaves the server** (server burst ≈ 4.7 s + 1 s `network-caching`). Hence the base `delay` of **53 s** for a freshly connected VLC. Confirmed by ear: with 53 s the fade landed on the first commercial. `--network-caching N` adds `(N − 1000)/1000` s on top.
 - **A long-running VLC can be minutes behind.** Triton resumes an existing session where it left off after a stall; nothing in VLC's stats reveals the accumulated offset (the playback position only shows stalls *since the connection*, and was 26 s off while the listener was ~3 min behind). Hence `resync` at startup and the calibration buttons.
-- **The end of a block is marked.** After the last spot the feed carries an `ad` entry with `ad_type=insert` (title "COMMERCIAL INSERT TRIGGER …") whose `cue_time_start` equals the last spot's end. `has_end_marker` keys on it; without it, `grace` (8 s) decides.
+- **The insert trigger is not the end of the commercials.** After the last spot the feed carries an `ad` entry with `ad_type=insert` (title "COMMERCIAL INSERT TRIGGER …") whose `cue_time_start` equals the last spot's end. It marks the end of Triton's own spots only: in the fixture's block (13:00 CEST) it is followed by an untitled 8 s entry, an untitled 71 s entry that the listener heard as commercials, four untitled jingles (35 s), and the first titled song **114 s after the last spot**. Un-ducking on the trigger brought the volume up ~1 minute early (v0.1.1). `block_ended` therefore waits until the listener reaches the first titled song after the last spot (the song is published at cue + 50 s but heard at cue + `delay`, so the gate is on stream time, not on publication) and otherwise for `grace` (180 s, measured 114 s plus room for a longer station block and the feed's lag variance). The live feed is an 8-entry window and the block's spots scroll out of it while that tail plays, so `hushbreak.lua` merges every poll into the entries it kept (`merge_entries`). The "end" calibration button compares against that song, not against the last spot.
 - **The feed server is slow at times** — 2–3 s response times and occasional 5+ s stalls, from every client. That is why a failed poll keeps the previous entry list and un-ducking never follows from missing data alone.
 - **`eventType=track,ad` returns nothing**; `eventType=track` or `eventType=ad` work, and no filter returns everything. The feed URL therefore has no filter.
 - The in-band `StreamTitle` is empty during commercials and jingles and carries `Artist - Title` during songs. It cannot be read from inside VLC (see above), so it is not used; a future external helper could.

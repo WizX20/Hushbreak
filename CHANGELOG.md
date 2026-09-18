@@ -6,6 +6,11 @@ Write new entries under **Unreleased** — the Release workflow stamps the versi
 
 ## [Unreleased]
 
+### Fixed
+
+- fix: the volume came back up about a minute too early, while commercials were still playing. The feed's "commercial insert" trigger marks the end of Triton's own spots, not of the break — on KINK about 80 s of station commercials and jingles follow it — so it no longer counts as the end marker. Un-ducking now waits until you reach the first titled song after the last spot (not until the feed publishes it — a VLC that has drifted behind would un-duck early), or for `grace` (raised from 120 s to 180 s: measured 114 s from the last spot to the song). The block's spots are remembered while its tail plays, since they scroll out of the feed's 8-entry window before the song appears
+- fix: the calibration button for the end of a break now measures against the first song after the break (it is labelled *Music is back now*); the last Triton spot it used before is not what you hear as the end
+
 ## [0.1.1] - 2026-09-18
 
 ### Fixed

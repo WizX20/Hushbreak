@@ -21,10 +21,11 @@ Settings: vlc --extraintf luaintf --lua-intf hushbreak \
                 (53 for KINK: 47 s stream buffer + ~6 s VLC buffer)
   feed_lag      seconds between an entry's cue start and its appearance in the feed (50)
   grace         seconds to stay ducked after the last known spot when the feed has
-                confirmed neither the end of the block nor a song (120). Breaks can
-                hold untitled promo segments between two runs of spots and the feed
-                server stalls for seconds at a time; a long grace keeps the volume
-                from pumping in the middle of the commercials.
+                not shown a song yet (180). Commercials go on after Triton's last
+                spot (measured: 114 s until the song, most of it untitled entries),
+                breaks can hold promo segments between two runs of spots, and the
+                feed server stalls for seconds at a time; a long grace keeps the
+                volume from coming up in the middle of the commercials.
   fade_down     seconds for the fade at the start of a break (0.7)
   fade_up       seconds for the fade back up when the break is over (3)
   retry         seconds between polls while the feed is late (2)
@@ -34,7 +35,8 @@ Settings: vlc --extraintf luaintf --lua-intf hushbreak \
   feed          override the feed URL; "{mount}" is replaced by the mount name
 
 Calibration by ear: the "Hushbreak calibration" extension (View menu) writes a marker
-file; this script picks it up and recomputes the delay from what you heard.
+file when you hear the first commercial or the first song after the break; this script
+picks it up and recomputes the delay from the feed.
 See README.md for installation.
 ]]
 
@@ -45,7 +47,7 @@ local settings = {
     min_volume = 0,
     delay = 53,
     feed_lag = 50,
-    grace = 120,
+    grace = 180,
     fade_down = 0.7,
     fade_up = 3,
     retry = 2,
@@ -211,7 +213,9 @@ while true do
         if feed_url and now >= next_poll_at then
             local fetched = core.parse_feed(read_url(feed_url))
             if #fetched > 0 then
-                entries = fetched
+                -- The feed is a short window; keep a block's spots until well past the
+                -- grace period, they scroll out while its tail is still playing.
+                entries = core.merge_entries(entries, fetched, now - delay - settings.grace - 60)
             else
                 -- Unreachable, or a valid but empty answer: keep the previous list in use.
                 vlc.msg.warn("[hushbreak] feed not reachable")
@@ -231,6 +235,9 @@ while true do
                 drift:reset(mono(), position)
                 delay = base_delay
                 log("calibrated on block %s: delay is now %.0f s", action, base_delay)
+            elseif action == "end" then
+                vlc.msg.warn("[hushbreak] calibration ignored: the feed shows no song after an ad block yet; "
+                    .. "try again in a few seconds")
             else
                 vlc.msg.warn("[hushbreak] calibration ignored: the feed shows no ad block yet")
             end
@@ -253,7 +260,7 @@ while true do
             log("ad break: volume %d -> %d (%s)", normal_volume, low_volume, spot.title)
         elseif spot and ducked and spot.title ~= last_title then
             log("  next spot: %s", spot.title)
-        elseif ducked and core.block_ended(entries, stream_now, settings.grace) then
+        elseif ducked and core.block_ended(entries, stream_now, settings.grace, settings.fade_up) then
             if volume == low_volume then
                 fade(low_volume, normal_volume, settings.fade_up)
                 log("ad break over: volume back to %d", normal_volume)
@@ -264,10 +271,10 @@ while true do
         end
         last_title = spot and spot.title or ""
 
-        -- Wake up for the next poll or spot boundary, but at least once a second so the
-        -- calibration marker is noticed promptly.
+        -- Wake up for the next poll or boundary (a spot edge, or the fade-up before the
+        -- song), but at least once a second so the calibration marker is noticed promptly.
         local wait = next_poll_at - now
-        local transition = core.next_transition(entries, now, delay)
+        local transition = core.next_transition(entries, now, delay, settings.fade_up)
         if transition and transition < wait then
             wait = transition
         end
