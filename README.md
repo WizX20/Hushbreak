@@ -106,14 +106,14 @@ In the preferences the same text, `hushbreak={duck_percent=80,min_volume=10}`, g
 | `retry` | `2` | Seconds between polls while the feed is late with the next entry. |
 | `idle` | `60` | Longest pause between polls. |
 | `mount` | *(auto)* | Triton mount name, e.g. `KINK`. Derived from the stream URL (`.../KINK_SC`) when omitted. |
-| `resync` | `true` | Restart the stream when Hushbreak starts, so the lag is known. See below. |
+| `resync` | `true` | Restart a stream that was already playing when Hushbreak got to it, so the lag is known. See below. |
 | `feed` | *(auto)* | Override the feed URL; `{mount}` is replaced by the mount name. For testing. |
 
 ## Calibration
 
 Everything hinges on *how far behind the feed you are hearing the stream*. Two things move that number:
 
-- **The session start.** Triton's server resumes an existing connection where it left off. A VLC that has been playing for hours, with a few hiccups on the way, can be minutes behind a fresh connection — and nothing in VLC tells you by how much. That is why Hushbreak restarts the stream when it starts (`resync`): a new connection lands on the base `delay`. Two seconds of silence, once.
+- **The session start.** Triton's server resumes an existing connection where it left off. A VLC that has been playing for hours, with a few hiccups on the way, can be minutes behind a fresh connection — and nothing in VLC tells you by how much. That is why Hushbreak restarts a stream it finds already playing (`resync`): a new connection lands on the base `delay`. Two seconds of silence, once. A stream you open after VLC started is a fresh connection anyway; Hushbreak follows whatever VLC plays, so opening the station later or switching stations needs nothing from you.
 - **Stalls and pauses while playing.** These add up too, but Hushbreak measures them from VLC's playback position and compensates automatically. The messages show `delay versus the feed: 61 s (base 53 + VLC drift 8)` when that happens.
 
 If the fades still come early or late, calibrate by ear: open View > *Hushbreak calibration* and press **Music is back now** at the moment the first song after the commercials starts (the jingles in between don't count), or **First commercial starts now** at the first commercial. Hushbreak computes the real delay from the feed and uses it from then on; the messages confirm with `calibrated on block end: delay is now 57 s`. *Music is back* is the reliable one: the feed knows the song by then, and the song is the only unambiguous end of a break — the station's own commercials and jingles follow Triton's last spot. **Reconnect stream** restarts the stream, the same thing `resync` does at startup.
