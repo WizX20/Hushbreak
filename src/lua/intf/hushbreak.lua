@@ -228,18 +228,15 @@ while true do
             log("restarting the stream (calibration)")
             restart_stream()
         elseif action == "start" or action == "end" then
-            local calibrated = at and core.calibrated_delay(entries, action, at)
+            local calibrated, reason = core.calibrated_delay(entries, action, at or 0, now)
             if calibrated then
                 -- The new base is what you heard versus cue time; drift starts over from here.
                 base_delay = calibrated
                 drift:reset(mono(), position)
                 delay = base_delay
                 log("calibrated on block %s: delay is now %.0f s", action, base_delay)
-            elseif action == "end" then
-                vlc.msg.warn("[hushbreak] calibration ignored: the feed shows no song after an ad block yet; "
-                    .. "try again in a few seconds")
             else
-                vlc.msg.warn("[hushbreak] calibration ignored: the feed shows no ad block yet")
+                vlc.msg.warn("[hushbreak] calibration ignored: " .. reason)
             end
         end
 

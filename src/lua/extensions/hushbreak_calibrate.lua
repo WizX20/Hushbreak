@@ -25,14 +25,23 @@ function descriptor()
     }
 end
 
+-- Written to a temporary name and renamed into place, so the interface script never
+-- reads a half-written line.
 local function write_marker(action)
-    local f, err = io.open(MARKER_FILE, "w")
+    local tmp = MARKER_FILE .. ".tmp"
+    local f, err = io.open(tmp, "w")
     if not f then
-        status:set_text("Could not write " .. MARKER_FILE .. ": " .. tostring(err))
+        status:set_text("Could not write " .. tmp .. ": " .. tostring(err))
         return
     end
     f:write(action .. " " .. os.time() .. "\n")
     f:close()
+    os.remove(MARKER_FILE)
+    local ok, rename_err = os.rename(tmp, MARKER_FILE)
+    if not ok then
+        status:set_text("Could not write " .. MARKER_FILE .. ": " .. tostring(rename_err))
+        return
+    end
     status:set_text(string.format("Marked '%s' at %s. Hushbreak picks it up within a second.",
         action, os.date("%H:%M:%S")))
     vlc.msg.info("[hushbreak] calibration marker: " .. action)
