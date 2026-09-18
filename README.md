@@ -16,6 +16,8 @@ A VLC add-on that hushes the ad breaks on internet radio. Listen to a Triton Dig
 
 It works because Triton publishes a *now-playing feed* for every station it streams: each song, jingle and ad spot appears there with a start time and a duration. Hushbreak follows that feed, works out how far behind the live feed your VLC is playing, and times the fades to what you actually hear.
 
+Hushbreak is a small Lua add-on that runs *inside* VLC — nothing to keep running next to it — and it exists thanks to two things it builds on: [VLC media player](https://www.videolan.org/vlc/) from the [VideoLAN](https://www.videolan.org/) project, free and open source, whose Lua scripting makes add-ons like this possible, and the [StreamTheWorld](https://www.tritondigital.com/products/streaming/streamtheworld) streaming platform by [Triton Digital](https://www.tritondigital.com/), whose public now-playing feed is what makes the ad breaks predictable. Neither is affiliated with this project.
+
 > See the [Changelog](CHANGELOG.md) for updates.
 
 ## License
@@ -24,8 +26,8 @@ This project is licensed under the [Business Source License 1.1](LICENSE) (BUSL-
 
 ## Requirements
 
-- **VLC 3.x** (tested with 3.0.23 on Windows 11; the scripts are plain Lua 5.1 and should run on the Linux and macOS builds too)
-- A station streamed by **StreamTheWorld** — the stream URL looks like `https://<n>.live.streamtheworld.com/<MOUNT>_SC`. KINK, KINK DNA and KINK Distortion are known to work.
+- **VLC 3.x** — free download at [videolan.org/vlc](https://www.videolan.org/vlc/) for Windows, macOS and Linux (tested with 3.0.23 on Windows 11; the scripts are plain Lua 5.1 and should run on the Linux and macOS builds too)
+- A station streamed by **[StreamTheWorld](https://www.tritondigital.com/products/streaming/streamtheworld)** (Triton Digital) — the stream URL looks like `https://<n>.live.streamtheworld.com/<MOUNT>_SC`. [KINK](https://www.kink.nl), KINK DNA and KINK Distortion are known to work; most stations on that platform publish the same feed.
 
 ## Install
 
@@ -121,6 +123,14 @@ For a different station the base `delay` may differ; calibrate once and pass the
 - Every entry in the feed (song, jingle, spot, "commercial insert" trigger) has a start and a duration, so Hushbreak knows when the current entry ends and polls just after that moment instead of on a fixed interval — once per song, once per spot. Ad blocks are made of contiguous spots; the *insert* trigger sits exactly at the end of a block and serves as the end marker.
 - Volume goes down and up in a short fade (six steps, ~0.7 s). If you change the volume yourself during a break, Hushbreak leaves it where you put it.
 - The pure logic lives in `hushbreak_core.lua` and is covered by the test suite against a real feed answer; `hushbreak.lua` is the thin VLC layer around it. [DEVGUIDE.md](DEVGUIDE.md) has the details, including the measurements this is built on.
+
+## Credits
+
+- [VLC media player](https://www.videolan.org/vlc/) by the [VideoLAN](https://www.videolan.org/) project — the player, and the Lua scripting that lets Hushbreak run inside it. Download it there if you do not have it yet.
+- [Triton Digital](https://www.tritondigital.com/) — the [StreamTheWorld](https://www.tritondigital.com/products/streaming/streamtheworld) platform and its public now-playing feed.
+- [KINK](https://www.kink.nl) — the station this was built and measured on.
+
+Hushbreak is an independent project and not affiliated with or endorsed by VideoLAN, Triton Digital or KINK.
 
 ## Contributing
 
