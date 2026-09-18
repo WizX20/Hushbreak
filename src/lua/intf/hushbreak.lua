@@ -31,7 +31,8 @@ Settings: vlc --extraintf luaintf --lua-intf hushbreak \
   retry         seconds between polls while the feed is late (2)
   idle          longest pause between polls (60)
   mount         Triton mount name; derived from the stream URL when omitted
-  resync        restart the stream on startup so the lag is known (true)
+  resync        restart a stream that was already playing when Hushbreak got to it,
+                so the lag is known (true)
   feed          override the feed URL; "{mount}" is replaced by the mount name
 
 Calibration by ear: the "Hushbreak calibration" extension (View menu) writes a marker
@@ -157,46 +158,48 @@ end
 log("Hushbreak %s starting: duck %.0f%%, floor %.0f%%, base delay %.0f s",
     core.VERSION, settings.duck_percent, settings.min_volume, settings.delay)
 
--- VLC may still be opening the playlist item; give it a moment.
-local waited = 0
-while not vlc.object.input() and waited < 30 do
-    sleep(0.5)
-    waited = waited + 0.5
-end
-
-local mount = settings.mount
-if not mount then
-    local item = vlc.input.item()
-    mount = item and core.mount_from_uri(item:uri())
-    if mount then
-        log("mount %s (from the stream URL)", mount)
-    else
-        log("cannot derive the Triton mount from the stream URL; set mount=... in lua-config")
-    end
-end
-local feed_url
-if settings.feed then
-    feed_url = settings.feed:gsub("{mount}", mount or "")
-elseif mount then
-    feed_url = core.feed_url(mount)
-end
-
-if settings.resync and (input_position() or 0) > 30 then
-    -- The server resumes an existing session where it left off; how far behind that is
-    -- cannot be read from VLC. A new session starts at the base delay.
-    log("restarting the stream so the lag is known (resync=false to skip)")
-    if restart_stream() then
-        sleep(4)
-    end
-end
-
 local base_delay = settings.delay
-local drift = core.new_drift(mono(), input_position() or 0)
+local drift = core.new_drift(mono(), 0)
 local reported_delay = -100
 
+-- What is playing: the item's URL, the Triton mount and feed URL derived from it, and
+-- whether the drift reference still has to be taken on the new input.
+local current_uri, mount, feed_url, fresh_input = nil, nil, nil, false
 local entries = {}
 local next_poll_at = 0
 local ducked, normal_volume, low_volume, last_title = false, 0, 0, ""
+
+-- Follow the item VLC plays: derive the mount and the feed URL from its URL, drop the
+-- entries of another station, and restart a stream that was already playing when
+-- Hushbreak got to it. Called whenever the playing item changes, so a stream opened
+-- long after VLC started, or a station change, is picked up too.
+local function attach(uri)
+    local new_mount = settings.mount or core.mount_from_uri(uri)
+    if new_mount ~= mount then
+        entries, next_poll_at, last_title = {}, 0, ""
+    end
+    mount = new_mount
+    if settings.feed then
+        feed_url = settings.feed:gsub("{mount}", mount or "")
+    elseif mount then
+        feed_url = core.feed_url(mount)
+    else
+        feed_url = nil
+    end
+    fresh_input = true
+    if mount then
+        log("mount %s (%s)", mount, settings.mount and "from lua-config" or "from the stream URL")
+    else
+        log("not a StreamTheWorld URL, nothing to do until the next item "
+            .. "(set mount=... in lua-config to force one): %s", uri)
+    end
+    if feed_url and settings.resync and (input_position() or 0) > 30 then
+        -- The server resumes an existing session where it left off; how far behind that is
+        -- cannot be read from VLC. A new session starts at the base delay.
+        log("restarting the stream so the lag is known (resync=false to skip)")
+        restart_stream()
+    end
+end
 
 -- Bring the volume back up after a break, over `seconds`, unless it was changed by
 -- hand meanwhile; then forget the ducked state.
@@ -214,6 +217,18 @@ end
 -- Main loop -------------------------------------------------------------------------
 
 while true do
+    local item = vlc.input.item()
+    local uri = item and item:uri() or nil
+    if uri ~= current_uri then
+        if ducked then
+            unduck("stream changed during an ad break", 0)
+        end
+        current_uri = uri
+        if uri then
+            attach(uri)
+        end
+    end
+
     local position = input_position()
     if not position then
         -- Nothing playing. VLC's volume outlives the input, so a ducked level would
@@ -222,7 +237,15 @@ while true do
             unduck("input gone during an ad break", 0)
         end
         sleep(1)
+    elseif not feed_url then
+        -- Not a stream this script knows; wait for the next item.
+        sleep(1)
     else
+        if fresh_input then
+            -- A new connection starts at the base delay; drift is counted from here.
+            drift:reset(mono(), position)
+            fresh_input = false
+        end
         local now = os.time()
         local delay = base_delay + drift:update(mono(), position)
 
