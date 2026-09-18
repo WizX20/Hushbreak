@@ -62,7 +62,7 @@ jobs:
       SECRET_NAME: HUSHBREAK_RELEASE_TOKEN
       WARN_DAYS: 30
       FAIL_DAYS: 14
-      ISSUE: https://github.com/WizX20/Hushbreak/issues?q=label%3Amaintenance
+      ISSUE: https://github.com/WizX20/Hushbreak/issues/2
     steps:
       - name: Read the token's expiry from the API
         env:

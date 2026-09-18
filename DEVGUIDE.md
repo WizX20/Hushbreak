@@ -141,7 +141,7 @@ If step 9 fails after step 8 pushed, create the release by hand with `git gh rel
 
 `main` is protected by a ruleset (pull requests only, squash merges only, CI checks required, no force-push; only the repository admin may bypass). `GITHUB_TOKEN` cannot bypass rulesets on a user-owned repository, so the release commit is pushed with a maintainer token:
 
-1. GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate. Resource owner `WizX20`, repository access: only `Hushbreak`, permissions: **Contents: Read and write** (Metadata: Read is added automatically). Expiry: one year at most — note the date in a `maintenance` issue.
+1. GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate. Resource owner `WizX20`, repository access: only `Hushbreak`, permissions: **Contents: Read and write** (Metadata: Read is added automatically). Expiry: one year at most — note the date in the rotation issue ([#2](https://github.com/WizX20/Hushbreak/issues/2)).
 2. `git gh secret set HUSHBREAK_RELEASE_TOKEN -R WizX20/Hushbreak` and paste the token.
 
 The `check` job fails early with a clear message when the secret is missing. CI's required **release token expiry** job reads the token's real expiry from the API on every PR and push: a warning 30 days out, a failure 14 days out — so an expiring token blocks merges until it is rotated. A push with this token also triggers CI on `main` for the release commit — expected, one extra run per release.
