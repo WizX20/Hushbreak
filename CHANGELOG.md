@@ -6,6 +6,8 @@ Write new entries under **Unreleased** — the Release workflow stamps the versi
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-18
+
 ### Added
 
 - feat: VLC interface script `hushbreak` that fades the volume down during ad breaks on Triton Digital / StreamTheWorld stations (KINK and friends) and back up afterwards, driven by the station's now-playing feed
@@ -15,3 +17,4 @@ Write new entries under **Unreleased** — the Release workflow stamps the versi
 - feat: `Hushbreak calibration` extension (View menu) with *Ad block starts/ends now* and *Reconnect stream* buttons
 - feat: `scripts/install.ps1` / `task install` to copy the scripts into VLC's per-user Lua folder
 - feat: Scoop install on Windows — this repo doubles as its own bucket (`scoop bucket add hushbreak https://github.com/WizX20/Hushbreak; scoop install hushbreak`)
+

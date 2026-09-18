@@ -4,7 +4,7 @@
   "homepage": "https://github.com/WizX20/Hushbreak",
   "license": "BUSL-1.1",
   "url": "https://github.com/WizX20/Hushbreak/releases/download/v0.1.0/Hushbreak-0.1.0.zip",
-  "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "hash": "F11884E31D67E07D374000CB3BFDC25CE3E58AFA17B55BA14E1441B740C92C59",
   "post_install": [
     "# VLC only loads scripts from its own Lua folders; copy them there (per user, no admin rights).",
     "$vlcLua = Join-Path $env:APPDATA 'vlc\\lua'",
