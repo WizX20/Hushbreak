@@ -1,0 +1,23 @@
+name: Station request
+description: Ask for support for a radio station or stream provider that Hushbreak does not follow yet.
+title: "[Station] "
+labels: ["station", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Hushbreak reads Triton Digital's now-playing feed, which most StreamTheWorld stations publish. Other providers need their own detection; tell us what you know about the stream.
+
+  - type: input
+    id: station
+    attributes:
+      label: Station and stream URL
+      placeholder: "Radio X, https://.../RADIOX_SC"
+    validations:
+      required: true
+
+  - type: textarea
+    id: details
+    attributes:
+      label: What do you know about how it marks ads?
+      description: Now-playing pages or APIs, ICY metadata during ads, anything that changes when a break starts.

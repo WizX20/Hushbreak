@@ -1,0 +1,6 @@
+# Normalise line endings in the repo. VLC and the test runner read either ending.
+* text=auto
+
+*.lua text
+*.png binary
+*.zip binary

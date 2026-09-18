@@ -1,0 +1,60 @@
+name: Feature request
+description: Suggest an enhancement or new capability.
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the use case first, the proposed solution second. The use case is what gets the change scoped correctly — the solution can change during discussion.
+
+  - type: checkboxes
+    id: prechecks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched [open and closed issues](https://github.com/WizX20/Hushbreak/issues?q=) for an existing request.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: The listening scenario. Skip the implementation for now.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How you imagine it working — the setting you would change, what you would hear.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area does this touch?
+      multiple: true
+      options:
+        - Ad detection (feed, timing, delay)
+        - Volume handling (ducking, fades, floor)
+        - Calibration extension
+        - Settings / lua-config
+        - Another station or stream provider
+        - Packaging / install
+        - Cross-cutting / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Links, related tools, reference implementations.

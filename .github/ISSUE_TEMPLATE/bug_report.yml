@@ -1,0 +1,85 @@
+name: Bug report
+description: Something doesn't work the way it should.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. The more concrete the repro, the faster it gets fixed.
+        Paste VLC's messages as text (Tools > Messages, verbosity 2, filter on `hushbreak`) rather than screenshots where you can.
+
+  - type: checkboxes
+    id: prechecks
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched [open and closed issues](https://github.com/WizX20/Hushbreak/issues?q=) for duplicates.
+          required: true
+        - label: I restarted VLC after installing or updating the scripts.
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Hushbreak version
+      description: "The first `[hushbreak] Hushbreak x.y.z starting` line in VLC's messages — or `main` + commit if you run from a checkout."
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: vlc
+    attributes:
+      label: VLC version and OS
+      description: "Help > About in VLC, plus your operating system."
+      placeholder: "VLC 3.0.23 on Windows 11"
+    validations:
+      required: true
+
+  - type: input
+    id: stream
+    attributes:
+      label: Stream
+      description: "The station and the stream URL or mount name (`[hushbreak] mount ...` in the messages)."
+      placeholder: "KINK, https://22343.live.streamtheworld.com/KINK_SC"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: Install method
+      options:
+        - Release zip unpacked into the VLC user folder
+        - scripts/install.ps1 (task install)
+        - Running from a checkout of this repo
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Number the steps so they can be followed verbatim. Include the exact VLC command line or preference values (`--lua-config ...`).
+      placeholder: |
+        1. Start VLC with `vlc --extraintf luaintf --lua-intf hushbreak KINK.pls`
+        2. Wait for an ad break …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: What happened, with the `[hushbreak]` lines from VLC's messages around that moment.
+      render: text
+    validations:
+      required: true

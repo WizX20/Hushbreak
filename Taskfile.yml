@@ -1,0 +1,61 @@
+# Task runner (https://taskfile.dev) — `task --list` for an overview.
+# Every task shells out to a script in scripts/, so CI and your machine run the same code.
+version: '3'
+
+vars:
+  PS: pwsh -NoProfile
+
+tasks:
+  setup:
+    desc: Maintainer, once per clone - route all GitHub traffic from this repo through the WizX20 account (see .gitconfig)
+    cmds:
+      - git config --local include.path ../.gitconfig
+      - git config user.name
+      - git config user.email
+
+  lint:
+    desc: luacheck over src/ and tests/
+    cmds:
+      - '{{.PS}} -File scripts/lint.ps1'
+
+  test:
+    desc: Lua test suite (any Lua 5.1+). Pass a name filter after --, e.g. task test -- drift
+    cmds:
+      - '{{.PS}} -File scripts/test.ps1 {{.CLI_ARGS}}'
+
+  check:
+    desc: lint + test, what CI runs
+    cmds:
+      - task: lint
+      - task: test
+
+  install:
+    desc: Copy the scripts into VLC's per-user Lua folder (restart VLC afterwards)
+    cmds:
+      - '{{.PS}} -File scripts/install.ps1'
+
+  uninstall:
+    desc: Remove the scripts from VLC's per-user Lua folder again
+    cmds:
+      - '{{.PS}} -File scripts/install.ps1 -Remove'
+
+  pack:
+    desc: Build dist/Hushbreak-<version>.zip and print its SHA256
+    cmds:
+      - '{{.PS}} -File scripts/pack.ps1'
+
+  gh:
+    desc: Run the GitHub CLI as WizX20 without switching accounts, e.g. task gh -- pr status
+    cmds:
+      - git gh {{.CLI_ARGS}}
+
+  github-settings:
+    desc: Maintainer - (re)apply the repository settings, labels and the main ruleset on GitHub
+    cmds:
+      - '{{.PS}} -File scripts/bootstrap-github.ps1'
+
+  release:
+    desc: Dispatch the Release workflow now (also runs weekly on its own). VERSION=x.y.z forces a version, else next patch
+    cmds:
+      - git gh workflow run release.yml -f version={{.VERSION}}
+      - git gh run list -w release.yml -L 1
