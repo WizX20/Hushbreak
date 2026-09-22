@@ -107,12 +107,17 @@ function M.active_spot(entries, stream_now)
     return nil
 end
 
---- End of the last known spot (cue time), or nil without spots.
+--- End of the last known spot (cue time), or nil without spots. The "COMMERCIAL INSERT
+-- TRIGGER" entry starts exactly there and outlives the spots in the feed's short window,
+-- so a block whose spots have already scrolled out (a VLC started late in the break) is
+-- still anchored by it.
 function M.last_spot_end(entries)
     local last = nil
-    for _, spot in ipairs(M.spots(entries)) do
-        if not last or spot.stop > last then
-            last = spot.stop
+    for _, e in ipairs(entries) do
+        if e.kind == "ad" and (e.ad_type == "break" or e.ad_type == "insert") then
+            if not last or e.stop > last then
+                last = e.stop
+            end
         end
     end
     return last
@@ -164,6 +169,24 @@ function M.block_ended(entries, stream_now, grace, lead)
         return true
     end
     return stream_now >= last + M.SPOT_MARGIN + grace
+end
+
+--- Whether the listener is inside an ad break at `stream_now`: the block has started
+-- for them (a spot or the insert trigger lies at or before `stream_now` - a VLC far
+-- behind the feed has not reached a freshly published block yet) and it has not ended
+-- (`block_ended`). This is the state the interface script ducks on, rather than the
+-- start of a spot, so a VLC started, reconnected or switched to the station in the
+-- middle of a break ducks at once - also in the station's own commercials after
+-- Triton's last spot, where no spot is active.
+function M.in_break(entries, stream_now, grace, lead)
+    local started = false
+    for _, e in ipairs(entries) do
+        if e.kind == "ad" and (e.ad_type == "break" or e.ad_type == "insert") and e.start <= stream_now then
+            started = true
+            break
+        end
+    end
+    return started and not M.block_ended(entries, stream_now, grace, lead)
 end
 
 --- Start (cue time) of the ad block containing the newest spot: walk back while the
@@ -270,11 +293,18 @@ local Drift = {}
 Drift.__index = Drift
 
 function M.new_drift(mono, position)
-    return setmetatable({ base_mono = mono, base_position = position, last_position = position }, Drift)
+    local drift = setmetatable({}, Drift)
+    drift:reset(mono, position)
+    return drift
 end
 
+--- Start over: a fresh connection lands on the base delay. While VLC is still
+-- connecting the position sits at 0 (1-5 s measured: DNS, TLS, the first bytes), and
+-- that time is not drift - the burst a new connection receives is the same whatever
+-- the handshake took - so the reference is taken at the first advancing position.
 function Drift:reset(mono, position)
     self.base_mono, self.base_position, self.last_position = mono, position, position
+    self.pending = position <= 0
 end
 
 --- Returns the drift in seconds (never negative).
@@ -283,6 +313,12 @@ function Drift:update(mono, position)
         self:reset(mono, position)
     end
     self.last_position = position
+    if self.pending then
+        if position > 0 then
+            self.base_mono, self.base_position, self.pending = mono, position, false
+        end
+        return 0
+    end
     return math.max(0, (mono - self.base_mono) - (position - self.base_position))
 end
 

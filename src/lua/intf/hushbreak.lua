@@ -209,7 +209,7 @@ local reported_delay = -100
 local current_uri, mount, feed_url, fresh_input = nil, nil, nil, false
 local entries = {}
 local next_poll_at = 0
-local ducked, normal_volume, low_volume, last_title = false, 0, 0, ""
+local ducked, normal_volume, low_volume, last_spot_start = false, 0, 0, 0
 
 -- Follow the item VLC plays: derive the mount and the feed URL from its URL, drop the
 -- entries of another station, and restart a stream that was already playing when
@@ -218,7 +218,7 @@ local ducked, normal_volume, low_volume, last_title = false, 0, 0, ""
 local function attach(uri)
     local new_mount = settings.mount or core.mount_from_uri(uri)
     if new_mount ~= mount then
-        entries, next_poll_at, last_title = {}, 0, ""
+        entries, next_poll_at, last_spot_start = {}, 0, 0
     end
     mount = new_mount
     if settings.feed then
@@ -284,7 +284,8 @@ while true do
         sleep(1)
     else
         if fresh_input then
-            -- A new connection starts at the base delay; drift is counted from here.
+            -- A new connection starts at the base delay; drift is counted from the
+            -- moment its playback starts (the position is 0 while VLC connects).
             drift:reset(mono(), position)
             fresh_input = false
         end
@@ -344,18 +345,27 @@ while true do
         local spot = core.active_spot(entries, stream_now)
         local volume = math.floor((vlc.volume.get() or 0) + 0.5)
 
-        if spot and not ducked then
+        -- Duck on the state "inside a break", not on the start of a spot: a VLC that
+        -- starts, reconnects or switches to the station in the middle of a break - also
+        -- in the station's own commercials after Triton's last spot - ducks right away.
+        local in_break = core.in_break(entries, stream_now, settings.grace, settings.fade_up)
+        if in_break and not ducked then
             normal_volume = volume
             low_volume = core.ducked_volume(normal_volume, settings.duck_percent, settings.min_volume)
             fade(normal_volume, low_volume, settings.fade_down)
             ducked = true
-            log("ad break: volume %d -> %d (%s)", normal_volume, low_volume, spot.title)
-        elseif spot and ducked and spot.title ~= last_title then
+            log("ad break: volume %d -> %d (%s)", normal_volume, low_volume,
+                spot and spot.title or "after the last spot, until the music is back")
+        elseif spot and ducked and spot.start > last_spot_start then
+            -- Only a newer spot: the position VLC reports is coarse, so the stream time
+            -- jitters by a fraction of a second around a spot boundary.
             log("  next spot: %s", spot.title)
-        elseif ducked and core.block_ended(entries, stream_now, settings.grace, settings.fade_up) then
+        elseif ducked and not in_break then
             unduck("ad break over", settings.fade_up)
         end
-        last_title = spot and spot.title or ""
+        if spot and spot.start > last_spot_start then
+            last_spot_start = spot.start
+        end
 
         -- Wake up for the next poll or boundary (a spot edge, or the fade-up before the
         -- song), but at least once a second so the calibration marker is noticed promptly.
