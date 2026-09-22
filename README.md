@@ -84,15 +84,19 @@ Open Tools > Messages (verbosity 2, filter `hushbreak`) to watch it work:
 [hushbreak] ad break over: volume back to 256
 ```
 
+How much softer the breaks play is set under View > *Hushbreak* — see *Settings*.
+
 ## Settings
 
-Settings travel in VLC's `lua-config` option as a Lua table named after the script. On the command line:
+**The volume during ad breaks is set in VLC: View > *Hushbreak*.** Two numbers — *softer by* (percent of your current volume; 60 turns 100 % into 40 %) and *never below* (percent of full volume, a floor for quiet listening) — and **Apply**. It takes effect at once, also in a break that is playing, and stays: the dialog saves `hushbreak-settings.txt` in VLC's user data folder (`%APPDATA%lc` on Windows), which Hushbreak reads at every start. The file is plain `key=value` lines, so any setting from the table below can be put there by hand.
+
+Everything else travels in VLC's `lua-config` option as a Lua table named after the script. On the command line:
 
 ```
 vlc --extraintf luaintf --lua-intf hushbreak --lua-config "hushbreak={duck_percent=80,min_volume=10}" KINK.pls
 ```
 
-In the preferences the same text, `hushbreak={duck_percent=80,min_volume=10}`, goes into *Lua interface configuration*.
+In the preferences the same text, `hushbreak={duck_percent=80,min_volume=10}`, goes into *Lua interface configuration* (the change needs a VLC restart). Values from the dialog win over `lua-config`; a misspelled setting is reported in the messages instead of being ignored.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -116,7 +120,7 @@ Everything hinges on *how far behind the feed you are hearing the stream*. Two t
 - **The session start.** Triton's server resumes an existing connection where it left off. A VLC that has been playing for hours, with a few hiccups on the way, can be minutes behind a fresh connection — and nothing in VLC tells you by how much. That is why Hushbreak restarts a stream it finds already playing (`resync`): a new connection lands on the base `delay`. Two seconds of silence, once. A stream you open after VLC started is a fresh connection anyway; Hushbreak follows whatever VLC plays, so opening the station later or switching stations needs nothing from you.
 - **Stalls and pauses while playing.** These add up too, but Hushbreak measures them from VLC's playback position and compensates automatically. The messages show `delay versus the feed: 61 s (base 53 + VLC drift 8)` when that happens.
 
-If the fades still come early or late, calibrate by ear: open View > *Hushbreak calibration* and press **Music is back now** at the moment the first song after the commercials starts (the jingles in between don't count), or **First commercial starts now** at the first commercial. Hushbreak computes the real delay from the feed and uses it from then on; the messages confirm with `calibrated on block end: delay is now 57 s`. *Music is back* is the reliable one: the feed knows the song by then, and the song is the only unambiguous end of a break — the station's own commercials and jingles follow Triton's last spot. **Reconnect stream** restarts the stream, the same thing `resync` does at startup.
+If the fades still come early or late, calibrate by ear: open View > *Hushbreak* and press **Music is back now** at the moment the first song after the commercials starts (the jingles in between don't count), or **First commercial starts now** at the first commercial. Hushbreak computes the real delay from the feed and uses it from then on; the messages confirm with `calibrated on block end: delay is now 57 s`. *Music is back* is the reliable one: the feed knows the song by then, and the song is the only unambiguous end of a break — the station's own commercials and jingles follow Triton's last spot. **Reconnect stream** restarts the stream, the same thing `resync` does at startup.
 
 For a different station the base `delay` may differ; calibrate once and pass the number as `delay=...` next time.
 
