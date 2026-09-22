@@ -35,15 +35,24 @@ Settings: vlc --extraintf luaintf --lua-intf hushbreak \
                 so the lag is known (true)
   feed          override the feed URL; "{mount}" is replaced by the mount name
 
-Calibration by ear: the "Hushbreak calibration" extension (View menu) writes a marker
-file when you hear the first commercial or the first song after the break; this script
-picks it up and recomputes the delay from the feed.
+The volume settings can also be set in VLC: View > Hushbreak. The dialog saves them
+to hushbreak-settings.txt ("key=value" lines) in VLC's user data folder; this script
+reads the file at every start and when the dialog saves it, and its values override
+lua-config. Any setting above can be put in that file by hand.
+
+Calibration by ear: the same dialog writes a marker file when you hear the first
+commercial or the first song after the break; this script picks it up and recomputes
+the delay from the feed.
 See README.md for installation.
 ]]
 
 local core = require("hushbreak_core")
 
-local settings = {
+local DATA_DIR = vlc.config.userdatadir()
+local MARKER_FILE = DATA_DIR .. "/hushbreak-marker.txt"
+local SETTINGS_FILE = DATA_DIR .. "/hushbreak-settings.txt"
+
+local DEFAULTS = {
     duck_percent = 60,
     min_volume = 0,
     delay = 53,
@@ -57,11 +66,29 @@ local settings = {
     resync = true,
     feed = nil,
 }
-for key, value in pairs(config or {}) do
+-- Every setting, nil ones included: the names lua-config and the settings file may use.
+local KNOWN_KEYS = { mount = true, feed = true }
+for key in pairs(DEFAULTS) do
+    KNOWN_KEYS[key] = true
+end
+
+local settings = {}
+for key, value in pairs(DEFAULTS) do
     settings[key] = value
 end
 
-local MARKER_FILE = vlc.config.userdatadir() .. "/hushbreak-marker.txt"
+-- Copy `values` (from lua-config or the settings file) into the settings; a key that is
+-- not a setting is a typo that would otherwise silently do nothing.
+local function apply_settings(values, source)
+    for key, value in pairs(values) do
+        if KNOWN_KEYS[key] then
+            settings[key] = value
+        else
+            vlc.msg.warn(string.format("[hushbreak] %s: unknown setting '%s' ignored", source, tostring(key)))
+        end
+    end
+end
+apply_settings(config or {}, "lua-config")
 
 local function log(fmt, ...)
     vlc.msg.info("[hushbreak] " .. string.format(fmt, ...))
@@ -141,7 +168,7 @@ local function fade(from, to, seconds)
     end
 end
 
--- The calibration extension writes one line, "<start|end|reconnect> <epoch>". Read and remove it.
+-- The dialog writes one line, "<start|end|reconnect|settings> <epoch>". Read and remove it.
 local function read_marker()
     local f = open_file(MARKER_FILE, "r")
     if not f then
@@ -153,10 +180,25 @@ local function read_marker()
     return core.parse_marker(line)
 end
 
+-- The settings the dialog saved, if any, on top of the defaults and lua-config.
+-- Returns whether the file was there.
+local function load_settings_file()
+    local f = open_file(SETTINGS_FILE, "r")
+    if not f then
+        return false
+    end
+    local text = f:read("*a")
+    f:close()
+    apply_settings(core.parse_settings(text), "settings file")
+    return true
+end
+
 -- Startup ---------------------------------------------------------------------------
 
-log("Hushbreak %s starting: duck %.0f%%, floor %.0f%%, base delay %.0f s",
-    core.VERSION, settings.duck_percent, settings.min_volume, settings.delay)
+local from_dialog = load_settings_file()
+log("Hushbreak %s starting: duck %.0f%%, floor %.0f%%%s, base delay %.0f s",
+    core.VERSION, settings.duck_percent, settings.min_volume,
+    from_dialog and " (from the dialog)" or "", settings.delay)
 
 local base_delay = settings.delay
 local drift = core.new_drift(mono(), 0)
@@ -263,7 +305,21 @@ while true do
         end
 
         local action, at = read_marker()
-        if action == "reconnect" then
+        if action == "settings" then
+            -- The dialog saved new values. A break in progress gets the new level at
+            -- once, unless the volume was changed by hand meanwhile.
+            load_settings_file()
+            log("settings from the dialog: duck %.0f%%, floor %.0f%%", settings.duck_percent, settings.min_volume)
+            if ducked then
+                local volume = math.floor((vlc.volume.get() or 0) + 0.5)
+                local new_low = core.ducked_volume(normal_volume, settings.duck_percent, settings.min_volume)
+                if volume == low_volume and new_low ~= low_volume then
+                    set_volume(new_low)
+                    log("ad break in progress: volume %d -> %d", low_volume, new_low)
+                    low_volume = new_low
+                end
+            end
+        elseif action == "reconnect" then
             log("restarting the stream (calibration)")
             restart_stream()
         elseif action == "start" or action == "end" then

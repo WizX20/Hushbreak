@@ -19,7 +19,7 @@ Vocabulary used throughout:
 
 local M = {}
 
-M.VERSION = "0.1.2"
+M.VERSION = "0.2.0"
 
 -- VLC's volume scale: 0..512, where 256 is 100%.
 M.FULL_VOLUME = 256
@@ -307,6 +307,29 @@ function M.feed_url(mount, count)
     return string.format(
         "https://np.tritondigital.com/public/nowplaying?mountName=%s&numberToFetch=%d",
         mount, count or 8)
+end
+
+--- Parse the settings file the Hushbreak dialog writes: "key=value" lines. A value
+-- that reads as a number becomes one, "true"/"false" a boolean, anything else stays a
+-- string; blank lines and lines starting with # are skipped. Empty table for nil.
+function M.parse_settings(text)
+    local settings = {}
+    if type(text) ~= "string" then
+        return settings
+    end
+    for line in text:gmatch("[^\r\n]+") do
+        local key, value = line:match("^%s*([%w_]+)%s*=%s*(.-)%s*$")
+        if key and not line:match("^%s*#") then
+            if value == "true" then
+                settings[key] = true
+            elseif value == "false" then
+                settings[key] = false
+            else
+                settings[key] = tonumber(value) or value
+            end
+        end
+    end
+    return settings
 end
 
 --- Parse "kind epoch" marker lines written by the calibration extension.
