@@ -66,10 +66,23 @@ test("active_spot finds the spot playing at a cue time", function()
     assert_eq(core.active_spot(list, KPN_START - 1), nil)
 end)
 
-test("last_spot_end is the end of the newest spot", function()
+local function only_kind(list, kind, ad_type)
+    local kept = {}
+    for _, e in ipairs(list) do
+        if e.kind == kind and (ad_type == nil or e.ad_type == ad_type) then
+            kept[#kept + 1] = e
+        end
+    end
+    return kept
+end
+
+test("last_spot_end is the end of the newest spot, or the insert trigger that sits there", function()
     local list = entries()
     assert_near(core.last_spot_end(list), INTERPOLIS_STOP, 0.001)
-    assert_near(core.last_spot_end(without_insert(list)), INTERPOLIS_STOP, 0.001, "the trigger is not a spot")
+    assert_near(core.last_spot_end(without_insert(list)), INTERPOLIS_STOP, 0.001, "without the trigger")
+    -- The spots have scrolled out of the feed window, the trigger is still in it.
+    assert_near(core.last_spot_end(only_kind(list, "ad", "insert")), INTERPOLIS_STOP, 0.05, "trigger alone")
+    assert_eq(core.last_spot_end(only_kind(list, "track")), nil, "tracks are not spots")
     assert_eq(core.last_spot_end({}), nil)
 end)
 
@@ -198,10 +211,56 @@ test("spots that scroll out of the feed window are remembered until the song", f
     local song = SUPERSONIC_START + 10
     local delay, grace, lead = 53, 180, 3
     local at_publication = feed_as_of(tail, song + FEED_LAG - 1)
-    assert_eq(core.last_spot_end(at_publication), nil, "spots have scrolled out of the window")
-    assert_eq(core.block_ended(at_publication, song + FEED_LAG - 1 - delay, grace, lead), true,
-        "the window alone would un-duck now")
+    assert_eq(#core.spots(at_publication), 0, "spots have scrolled out of the window")
+    assert_eq(core.block_ended(without_insert(at_publication), song + FEED_LAG - 1 - delay, grace, lead), true,
+        "the window alone, without the trigger, would un-duck now")
+    assert_eq(core.block_ended(at_publication, song + FEED_LAG - 1 - delay, grace, lead), false,
+        "the trigger still anchors the block")
     assert_near(replay_until_ended(tail, delay, grace, lead), song + delay - lead, 1, "kept history waits for the song")
+end)
+
+test("in_break is the whole break for the listener: the spots and the station's tail", function()
+    -- Ducking follows this state instead of the start of a spot, so a VLC that starts
+    -- in the middle of a break ducks at once - reported: VLC started while commercials
+    -- were playing, nothing happened. After Triton's last spot the station's own
+    -- commercials and jingles go on until the song (27..114 s measured), with no spot
+    -- active; a start in that tail used to be missed entirely.
+    local list = entries()
+    local grace, lead = 180, 3
+    assert_eq(core.in_break(list, KPN_START - 0.1, grace, lead), false, "before the block")
+    assert_eq(core.in_break(list, KPN_START, grace, lead), true, "first spot")
+    assert_eq(core.in_break(list, INTERPOLIS_START + 10, grace, lead), true, "last spot")
+    assert_eq(core.in_break(list, INTERPOLIS_STOP + 30, grace, lead), true, "the tail after the last spot")
+    assert_eq(core.in_break(list, SUPERSONIC_START - lead - 0.1, grace, lead), true, "jingles, just before the fade-up")
+    assert_eq(core.in_break(list, SUPERSONIC_START - lead, grace, lead), false, "fade-up point")
+    assert_eq(core.in_break(list, SUPERSONIC_START + 100, grace, lead), false, "music")
+    assert_eq(core.in_break({}, INTERPOLIS_START, grace, lead), false, "nothing known")
+    assert_eq(core.in_break(only_kind(list, "track"), INTERPOLIS_START, grace, lead), false, "no ads known")
+    -- The trigger alone (spots scrolled out of the window) still marks a break in progress.
+    local trigger_only = only_kind(list, "ad", "insert")
+    assert_eq(core.in_break(trigger_only, INTERPOLIS_STOP + 30, grace, lead), true, "trigger: tail in progress")
+    assert_eq(core.in_break(trigger_only, INTERPOLIS_STOP + core.SPOT_MARGIN + grace + 0.1, grace, lead), false,
+        "trigger: past grace")
+    assert_eq(core.in_break(trigger_only, INTERPOLIS_STOP - 10, grace, lead), false, "trigger not reached yet")
+end)
+
+test("a VLC started anywhere in the break ducks at once, one far behind the feed does not duck early", function()
+    local list = entries()
+    local grace, lead = 180, 3
+    -- Fresh start: the feed as it is at that wall-clock time, the listener 53 s behind.
+    local function starting_at(wall, delay)
+        return core.in_break(feed_as_of(list, wall), wall - delay, grace, lead)
+    end
+    assert_eq(starting_at(KPN_START + 53 + 5, 53), true, "in the first spot")
+    assert_eq(starting_at(INTERPOLIS_START + 53 + 5, 53), true, "in the last spot")
+    assert_eq(starting_at(INTERPOLIS_STOP + 53 + 30, 53), true, "in the untitled entries after the trigger")
+    assert_eq(starting_at(SUPERSONIC_START + 53 - 20, 53), true, "in the jingles")
+    assert_eq(starting_at(SUPERSONIC_START + 53 + 10, 53), false, "in the song after the block")
+    assert_eq(starting_at(KPN_START + 53 - 10, 53), false, "10 s before the block: nothing published yet")
+    -- The first spot is published at cue + 50; a listener 3 minutes behind (a session
+    -- resumed after stalls) hears it 130 s later and must not duck on publication.
+    assert_eq(starting_at(KPN_START + 51, 180), false, "drifted VLC: block published, not reached")
+    assert_eq(starting_at(KPN_START + 180 + 1, 180), true, "drifted VLC: block reached")
 end)
 
 test("fade_plan gives ~120 ms steps, at least two", function()
@@ -270,6 +329,24 @@ test("drift grows with stalls and resets when the stream restarts", function()
     assert_eq(drift:update(131, 1), 0, "position jumped back: restart")
     assert_eq(drift:update(141, 11), 0)
     assert_eq(drift:update(140, 11), 0, "never negative")
+end)
+
+test("drift does not count the time VLC spends connecting", function()
+    -- The position sits at 0 while VLC connects (1-5 s measured); a fresh connection
+    -- lands on the base delay whatever that took, so the reference is the first advance.
+    local drift = core.new_drift(100, 0)
+    assert_eq(drift:update(103, 0), 0, "still connecting")
+    assert_eq(drift:update(104, 0.05), 0, "playback starts: reference taken here")
+    assert_eq(drift:update(114, 10.05), 0, "the 4 s of connecting did not count")
+    assert_eq(drift:update(116, 11.05), 1, "a stall after that does")
+    -- Same after a restart: the position drops to 0 and stays there while reconnecting.
+    assert_eq(drift:update(120, 0), 0, "restarted")
+    assert_eq(drift:update(125, 0), 0, "reconnecting")
+    assert_eq(drift:update(126, 0.5), 0)
+    assert_eq(drift:update(136, 10.5), 0, "no drift from the reconnect")
+    -- A calibration resets on a running input: no waiting.
+    drift:reset(200, 50)
+    assert_eq(drift:update(210, 55), 5)
 end)
 
 test("mount_from_uri", function()
