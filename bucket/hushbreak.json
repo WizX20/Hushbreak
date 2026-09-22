@@ -1,10 +1,10 @@
 {
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Hushbreak - VLC add-on that hushes the ad breaks on Triton/StreamTheWorld radio streams such as KINK.",
   "homepage": "https://github.com/WizX20/Hushbreak",
   "license": "BUSL-1.1",
-  "url": "https://github.com/WizX20/Hushbreak/releases/download/v0.1.1/Hushbreak-0.1.1.zip",
-  "hash": "A13F94CE4426E48B8F30C2844BDC9F02AD83BABA06DF0B209AD8B558ABAF22DA",
+  "url": "https://github.com/WizX20/Hushbreak/releases/download/v0.1.2/Hushbreak-0.1.2.zip",
+  "hash": "D1C3FC0ED894B2739DCB873DD49E1A0FF94F63482D364DF252FE9E223944FC86",
   "post_install": [
     "# VLC only loads scripts from its own Lua folders; copy them there (per user, no admin rights).",
     "$vlcLua = Join-Path $env:APPDATA 'vlc\\lua'",

@@ -19,7 +19,7 @@ Vocabulary used throughout:
 
 local M = {}
 
-M.VERSION = "0.1.1"
+M.VERSION = "0.1.2"
 
 -- VLC's volume scale: 0..512, where 256 is 100%.
 M.FULL_VOLUME = 256
