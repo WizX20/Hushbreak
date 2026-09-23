@@ -9,11 +9,24 @@ folder that the interface script reads: hushbreak-settings.txt (the volume setti
 "key=value" lines, read at every start) and a marker line that tells the running
 interface to act on a calibration press or to re-read the settings at once.
 See lua/intf/hushbreak.lua.
+
+Nothing in the vlc table may be touched while this file loads. VLC runs every extension
+once at startup just to read its descriptor(), and at that point the API is not there
+yet (VLC 3, modules/lua/extension.c: the full API is only registered when the extension
+is opened) - an error then makes VLC skip the extension without a trace in the menu.
+Everything below reaches vlc.* from inside a function.
 ]]
 
-local DATA_DIR = vlc.config.userdatadir()
-local MARKER_FILE = DATA_DIR .. "/hushbreak-marker.txt"
-local SETTINGS_FILE = DATA_DIR .. "/hushbreak-settings.txt"
+-- Paths in VLC's user data folder, looked up when needed.
+local function data_file(name)
+    return vlc.config.userdatadir() .. "/" .. name
+end
+local function marker_file()
+    return data_file("hushbreak-marker.txt")
+end
+local function settings_file()
+    return data_file("hushbreak-settings.txt")
+end
 
 -- Defaults of the interface script, shown when neither the settings file nor lua-config
 -- says otherwise.
@@ -22,7 +35,12 @@ local DEFAULTS = { duck_percent = 60, min_volume = 0 }
 local dialog, duck_input, floor_input, settings_status, calibration_status
 
 -- VLC's own file functions handle non-ASCII paths on Windows; plain io/os are the fallback.
-local open_file = (vlc.io and vlc.io.open) or io.open
+local function open_file(path, mode)
+    if vlc.io and vlc.io.open then
+        return vlc.io.open(path, mode)
+    end
+    return io.open(path, mode)
+end
 local function remove_file(path)
     if vlc.io and vlc.io.unlink then
         vlc.io.unlink(path)
@@ -65,7 +83,7 @@ local function write_file(path, text)
 end
 
 local function write_marker(action)
-    return write_file(MARKER_FILE, action .. " " .. os.time() .. "\n")
+    return write_file(marker_file(), action .. " " .. os.time() .. "\n")
 end
 
 -- The volume settings as the interface script sees them: the settings file, else the
@@ -84,7 +102,7 @@ local function current_settings()
             values[key] = value
         end
     end
-    local f = open_file(SETTINGS_FILE, "r")
+    local f = open_file(settings_file(), "r")
     if f then
         for line in f:lines() do
             local key, value = line:match("^%s*([%w_]+)%s*=%s*([%d.]+)%s*$")
@@ -119,7 +137,7 @@ local function on_apply()
         return
     end
     local ok
-    ok, err = write_file(SETTINGS_FILE, string.format("duck_percent=%d\nmin_volume=%d\n", duck, floor))
+    ok, err = write_file(settings_file(), string.format("duck_percent=%d\nmin_volume=%d\n", duck, floor))
     if not ok then
         settings_status:set_text(err)
         return
