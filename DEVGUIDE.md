@@ -9,7 +9,8 @@ src/lua/intf/hushbreak.lua                 VLC interface script: the loop, volum
 src/lua/intf/modules/hushbreak_core.lua    pure logic, no VLC calls; carries M.VERSION
 src/lua/extensions/hushbreak_calibrate.lua VLC extension: three buttons -> marker file
 tests/run.lua                              dependency-free test runner
-tests/hushbreak_core_test.lua              the suite
+tests/hushbreak_core_test.lua              the suite for the core module
+tests/extension_test.lua                   the extension, loaded the way VLC loads it, against a stand-in vlc API
 tests/fixtures/feed-kink.xml               a real feed answer (KINK, 2026-09-18, 14 entries: spots, trigger, station tail, songs)
 scripts/*.ps1                              lint, test, install, pack, set-version, cut-changelog, bootstrap-github
 .github/workflows/ci.yml                   lint + test on Lua 5.1, pack, release-token expiry
@@ -77,7 +78,7 @@ Discovered by dumping `vlc.*` from a throwaway interface script; VLC ships no RE
 | `vlc.msg` | `dbg`, `info`, `warn`, `err`. |
 | `config` | The Lua table given as `--lua-config "hushbreak={...}"`, keyed by script name. |
 
-Extensions additionally get `vlc.dialog` (labels, buttons, …) and are event-driven: no loop, no timer. That is why the polling lives in an interface script and the buttons in an extension, joined by a marker file in `vlc.config.userdatadir()`.
+Extensions additionally get `vlc.dialog` (labels, buttons, …) and are event-driven: no loop, no timer. **An extension must not touch `vlc` while its file loads:** VLC runs the file once at startup only to read `descriptor()`, and then there is no `vlc` global at all (measured: `attempt to index global 'vlc' (a nil value)`, after which the extension is skipped and never appears under View). Look everything up inside the functions; `tests/extension_test.lua` loads the file that way. That is why the polling lives in an interface script and the buttons in an extension, joined by a marker file in `vlc.config.userdatadir()`.
 
 `vlc.input.item():metas()` does **not** expose the stream's ICY `StreamTitle` on these HTTPS streams (the new HTTP stack drops it), so the in-band metadata cannot be read from inside VLC; the feed is the only source.
 

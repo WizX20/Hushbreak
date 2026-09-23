@@ -12,6 +12,7 @@ Write new entries under **Unreleased** — the Release workflow stamps the versi
 
 ### Fixed
 
+- fix: the extension never showed up under View (not the calibration buttons, and so not the new settings dialog either). VLC reads an extension's descriptor at startup before any of its Lua API exists, and the extension looked up VLC's data folder right then; that error made VLC skip it silently. It now does so only when a button is pressed (#23)
 - fix: a VLC started, reconnected or switched to the station in the middle of an ad break did nothing for that break. Ducking now follows the state "inside a break" instead of the start of a spot, so it kicks in at once — also in the station's own commercials and jingles after Triton's last spot (27–114 s measured), where no spot is active. The "commercial insert" trigger anchors a block whose spots have already left the feed window. A VLC far behind the feed still waits until it actually reaches the block (#18)
 - fix: the time VLC spends connecting (1–5 s measured) no longer counts as drift, which made the fades of every fresh start late by that much
 
