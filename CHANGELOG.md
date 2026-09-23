@@ -6,6 +6,8 @@ Write new entries under **Unreleased** — the Release workflow stamps the versi
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-23
+
 ### Added
 
 - feat: the volume during ad breaks is set from VLC's own menu: View > *Hushbreak* has *softer by* and *never below* with an Apply button, above the calibration buttons. The values apply at once (also to a break that is playing) and are saved to `hushbreak-settings.txt` in VLC's user data folder, which Hushbreak reads at every start; they win over `lua-config`. Any setting can be put in that file by hand. A misspelled setting, in the file or in `lua-config`, is now reported in the messages instead of silently ignored (#19)
