@@ -25,7 +25,7 @@ This repo is published under the **WizX20** account from a machine whose active 
 ```powershell
 task check        # lint + test — run before every push
 task test         # Lua suite via tests/run.lua; `task test -- drift` filters by name
-task lint         # luacheck; per-file globals in .luacheckrc
+task lint         # changelog.d/ fragments, then luacheck; per-file globals in .luacheckrc
 task install      # copy the three scripts into VLC's user Lua folder; `task uninstall` undoes
 task pack         # dist/Hushbreak-<version>.zip + sha256
 task github-settings         # (re)apply repo settings, labels, main ruleset via git gh
@@ -41,7 +41,7 @@ Tools: `scoop install lua luacheck` (any Lua 5.1+ runs the suite; CI uses 5.1 be
 - **Never poll blindly.** Every feed entry has a duration; scheduling comes from `core.next_poll` and `core.next_transition`. A failed or empty poll keeps the previous entry list — un-ducking needs a titled song after the last spot or the grace period, never the mere absence of data (that pumps the volume). The "commercial insert" trigger is **not** the end of the break: station commercials follow it (see DEVGUIDE.md → Measurements).
 - **Timing constants are measurements, not guesses.** `delay=53`, `feed_lag=50`, the 47 s stream offset: see DEVGUIDE.md → Measurements before changing any of them, and re-measure with the ICY reader described there.
 - **Testing in VLC without touching the user's player:** start a separate headless instance (`-I dummy --extraintf luaintf --lua-intf hushbreak --no-one-instance --aout amem --file-logging --logfile <file> --verbose 2`) with `--lua-config "hushbreak={delay=<now - a cue time inside a past block>,resync=false,feed='file:///.../feed-kink.xml'}"`, and stop **only that PID**. Never `Get-Process vlc | Stop-Process`.
-- **Changelog**: add a line under `## [Unreleased]`; the release workflow stamps the version (an empty section falls back to commit subjects, so keep subjects readable). Do not touch released sections.
+- **Changelog**: a user-visible change adds a fragment `changelog.d/<branch>.<section>.md` (see `changelog.d/README.md`) — never edit `CHANGELOG.md` in a PR; the release folds the fragments in (with none, it falls back to commit subjects, so keep subjects readable). Do not touch released sections.
 - **Versions**: patch bumps are automatic. For a minor/major, raise `M.VERSION` in `hushbreak_core.lua` (and the extension's `version`) in the PR; the next release ships that version.
 - **Settings are documented in three places**: the header of `hushbreak.lua`, the README table, and the defaults table in the script. Change all three.
 - **Commits**: imperative subject ≤72 chars, new commits (no amend), no `--no-verify`. Branches `feature/…`, `fix/…`, `chore/…` off `main`.

@@ -14,7 +14,7 @@ tasks:
       - git config user.email
 
   lint:
-    desc: luacheck over src/ and tests/
+    desc: Check the changelog.d/ fragments, then luacheck over src/ and tests/
     cmds:
       - '{{.PS}} -File scripts/lint.ps1'
 

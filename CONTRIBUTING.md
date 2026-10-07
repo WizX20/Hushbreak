@@ -31,7 +31,7 @@ Do **not** open a public issue for security-sensitive bugs. Use GitHub's [privat
 2. Make your change. Keep the diff focused — one concern per PR.
 3. Run `task check` (luacheck + the Lua suite). Add or extend a test in `tests/hushbreak_core_test.lua` for behaviour you changed; the fixture in `tests/fixtures/` is a real feed answer, add another one if your change needs a different shape of data.
 4. Try it in a real VLC through at least one ad break. The VLC layer (`hushbreak.lua`) is not covered by the suite; DEVGUIDE.md shows how to test it in a headless VLC against the fixture without waiting for a real break.
-5. Update [`CHANGELOG.md`](CHANGELOG.md) — add a line under **Unreleased** for any user-visible change. Never edit released sections.
+5. For any user-visible change, add a changelog fragment: `changelog.d/<branch>.<section>.md` with a `- ` bullet ([how](changelog.d/README.md)). Do not edit `CHANGELOG.md` itself: one file per PR means no PR conflicts with another over it.
 6. If a setting or default changed, update the header of `hushbreak.lua` and the settings table in the README.
 7. Push and open a PR against `main`. Reference any related issue (`Fixes #123`).
 

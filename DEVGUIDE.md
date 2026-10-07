@@ -12,6 +12,7 @@ tests/run.lua                              dependency-free test runner
 tests/hushbreak_core_test.lua              the suite for the core module
 tests/extension_test.lua                   the extension, loaded the way VLC loads it, against a stand-in vlc API
 tests/fixtures/feed-kink.xml               a real feed answer (KINK, 2026-09-18, 14 entries: spots, trigger, station tail, songs)
+changelog.d/                               one release-notes fragment per pull request; the release folds them into CHANGELOG.md
 scripts/*.ps1                              lint, test, install, pack, set-version, cut-changelog, bootstrap-github
 .github/workflows/ci.yml                   lint + test on Lua 5.1, pack, release-token expiry
 .github/workflows/release.yml              weekly / manual release
@@ -53,7 +54,7 @@ Two things to know about that instance:
 ```powershell
 task check          # both
 task test           # lua tests/run.lua; `task test -- drift` filters by case name
-task lint           # luacheck src tests
+task lint           # cut-changelog.ps1 -Check (the changelog.d/ fragments), then luacheck src tests
 ```
 
 Any Lua from 5.1 up runs the suite (`scoop install lua` on Windows gives 5.5, `apt install lua5.1` on Debian/Ubuntu); CI uses 5.1 because that is the version VLC 3 embeds (`lua/intf/cli.luac` starts with `1b 4c 75 61 51` — bytecode version 0x51). The core module must therefore stay 5.1-compatible: no `goto`, no `//`, no bit operators, no `table.unpack`, and no `%d` with a non-integer float in `string.format` (5.3+ raises on that; use `%.0f`).
@@ -136,7 +137,7 @@ The `check` job decides first, on `main`:
 
 Then the `release` job, on that same commit — not whatever `main` is by then:
 
-5. **Stamp** — `scripts/set-version.ps1` writes the version into `hushbreak_core.lua` and the extension's descriptor; `scripts/cut-changelog.ps1 -FallbackFromGit` turns `## [Unreleased]` into `## [x.y.z] - <date>` and extracts that section as the release notes. An empty section is filled from the commit subjects since the last tag, so write readable subjects even when you skip the changelog.
+5. **Stamp** — `scripts/set-version.ps1` writes the version into `hushbreak_core.lua` and the extension's descriptor; `scripts/cut-changelog.ps1 -FallbackFromGit` folds the `changelog.d/` fragments (and any lines still under `## [Unreleased]`) into a new `## [x.y.z] - <date>` section, grouped per Keep a Changelog section, deletes the fragments and extracts that section as the release notes. With no entries at all the notes are the commit subjects since the last tag, so write readable subjects even when you skip the fragment.
 6. **Lint + test** the stamped sources on Lua 5.1.
 7. **Pack** — `scripts/pack.ps1` builds `dist/Hushbreak-x.y.z.zip` (`lua/` tree plus `LICENSE`, `NOTICE`, `README.md`) and prints its SHA256.
 8. **Bump the bucket** — `bucket/hushbreak.json` gets the new `version`, `url` and `hash`, edited in place.
@@ -181,7 +182,7 @@ Not yet. winget has no notion of VLC add-ons; publishing means wrapping the scri
 
 ## Conventions
 
-- **Changelog** — add a line under `## [Unreleased]` for user-visible changes; the release workflow stamps the version. Never edit released sections.
+- **Changelog** — a user-visible change adds a fragment `changelog.d/<branch>.<section>.md` ([format](changelog.d/README.md)); `scripts/cut-changelog.ps1` folds the fragments into `CHANGELOG.md` at release and deletes them. Never edit released sections.
 - **Settings** — documented in the script header, the README table and the defaults table. Change all three.
 - **Commits** — new commits, no amends of published commits, no skipped hooks.
 - **Timing constants** — measurements, with the method written down here. Re-measure, then change.

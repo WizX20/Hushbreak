@@ -24,7 +24,7 @@ Thanks for the PR! Fill in the sections below — the checklist at the bottom ca
 
 ## Checklist
 
-- [ ] `CHANGELOG.md` has a new entry under **Unreleased** (user-visible changes only).
+- [ ] A changelog fragment in `changelog.d/` (user-visible changes only; see [`changelog.d/README.md`](../changelog.d/README.md)) — not an edit to `CHANGELOG.md`.
 - [ ] The settings table in `README.md` and the header of `hushbreak.lua` are updated if a setting or default changed.
 - [ ] No new dependency: the scripts stay plain Lua 5.1 that runs inside VLC 3 as-is.
 - [ ] Commits follow the conventions in [CONTRIBUTING.md](../CONTRIBUTING.md) (imperative subject ≤72 chars, new commits not amends, hooks not skipped).
