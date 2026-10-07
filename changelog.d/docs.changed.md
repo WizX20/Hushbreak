@@ -1,0 +1,1 @@
+- docs: the README names VLC's settings folder correctly again, `%APPDATA%\vlc` (a stray control character stood in for `\v`), and its sample of VLC's messages no longer shows an old version number
