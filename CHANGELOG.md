@@ -6,6 +6,10 @@ New entries go in [changelog.d/](changelog.d/README.md), one file per pull reque
 
 ## [Unreleased]
 
+### Fixed
+
+- fix: release pipeline — releases exactly the commit CI verified; pushes the release commit and tag atomically; drafts the GitHub Release before the push and publishes it after, as the latest release, so `main` never points Scoop at a zip that does not exist; refuses to release when CI's verdict is unknown; keeps the release token out of every step but the push. CI checks the release token's expiry weekly as well, and no longer fails Dependabot's pull requests on it
+
 ## [0.2.0] - 2026-09-23
 
 ### Added
