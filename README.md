@@ -73,10 +73,10 @@ vlc --extraintf luaintf --lua-intf hushbreak KINK.pls
 
 Save and restart VLC. From then on every stream you play in VLC is watched; on streams that are not StreamTheWorld stations Hushbreak just logs that it cannot find a feed and does nothing.
 
-Open Tools > Messages (verbosity 2, filter `hushbreak`) to watch it work:
+Open Tools > Messages (verbosity 2, filter `hushbreak`) to watch it work. The first line names the version you have installed where this shows `<version>`:
 
 ```
-[hushbreak] Hushbreak 0.1.0 starting: duck 60%, floor 0%, base delay 53 s
+[hushbreak] Hushbreak <version> starting: duck 60%, floor 0%, base delay 53 s
 [hushbreak] mount KINK (from the stream URL)
 [hushbreak] delay versus the feed: 53 s (base 53 + VLC drift 0)
 [hushbreak] ad break: volume 256 -> 102 (RO VUURWERK R30)
