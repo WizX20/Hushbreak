@@ -73,10 +73,10 @@ vlc --extraintf luaintf --lua-intf hushbreak KINK.pls
 
 Save and restart VLC. From then on every stream you play in VLC is watched; on streams that are not StreamTheWorld stations Hushbreak just logs that it cannot find a feed and does nothing.
 
-Open Tools > Messages (verbosity 2, filter `hushbreak`) to watch it work:
+Open Tools > Messages (verbosity 2, filter `hushbreak`) to watch it work. The first line names the version you have installed where this shows `<version>`:
 
 ```
-[hushbreak] Hushbreak 0.1.0 starting: duck 60%, floor 0%, base delay 53 s
+[hushbreak] Hushbreak <version> starting: duck 60%, floor 0%, base delay 53 s
 [hushbreak] mount KINK (from the stream URL)
 [hushbreak] delay versus the feed: 53 s (base 53 + VLC drift 0)
 [hushbreak] ad break: volume 256 -> 102 (RO VUURWERK R30)
@@ -88,7 +88,7 @@ How much softer the breaks play is set under View > *Hushbreak* — see *Setting
 
 ## Settings
 
-**The volume during ad breaks is set in VLC: View > *Hushbreak*.** Two numbers — *softer by* (percent of your current volume; 60 turns 100 % into 40 %) and *never below* (percent of full volume, a floor for quiet listening) — and **Apply**. It takes effect at once, also in a break that is playing, and stays: the dialog saves `hushbreak-settings.txt` in VLC's user data folder (`%APPDATA%lc` on Windows), which Hushbreak reads at every start. The file is plain `key=value` lines, so any setting from the table below can be put there by hand.
+**The volume during ad breaks is set in VLC: View > *Hushbreak*.** Two numbers — *softer by* (percent of your current volume; 60 turns 100 % into 40 %) and *never below* (percent of full volume, a floor for quiet listening) — and **Apply**. It takes effect at once, also in a break that is playing, and stays: the dialog saves `hushbreak-settings.txt` in VLC's user data folder (`%APPDATA%\vlc` on Windows), which Hushbreak reads at every start. The file is plain `key=value` lines, so any setting from the table below can be put there by hand.
 
 Everything else travels in VLC's `lua-config` option as a Lua table named after the script. On the command line:
 

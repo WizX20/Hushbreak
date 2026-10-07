@@ -148,9 +148,14 @@ Then the `release` job, on that same commit — not whatever `main` is by then:
 
 When step 12 fails, `main` and the tag are out and `bucket/hushbreak.json` on `main` points at the draft's zip, so `scoop install` fails until the draft is published: `git gh release edit vx.y.z --draft=false --latest`. The next run stops in step 1 with that same command instead of reporting "nothing to release". Do not rebuild the zip from a checkout of the tag and upload that instead — a re-packed zip has another hash than the one in the pushed manifest. If the draft is gone, its zip is too: merge anything to `main` and release again.
 
-### First release
+### Repository setup
 
-`bucket/hushbreak.json` ships with a placeholder hash until the first release has run; `scoop install hushbreak` fails with a hash mismatch before that. Run `task release` once the repo is on GitHub and CI is green — it ships the sources' `0.1.0`.
+Done once, before `0.1.0` (2026-09-18); kept as the checklist for a repository like this one:
+
+1. `WizX20/Hushbreak` is **public**: Scoop downloads release assets anonymously (*Repo visibility* below).
+2. `task github-settings` applied the settings, the labels and the ruleset `main` (below); run it again whenever a required check is renamed.
+3. The `HUSHBREAK_RELEASE_TOKEN` secret (below), with a dated `maintenance` issue to rotate it ([#2](https://github.com/WizX20/Hushbreak/issues/2)).
+4. `task release` shipped the sources' `0.1.0` once CI was green; until then `bucket/hushbreak.json` carried a placeholder hash and `scoop install` failed. From then on the release workflow keeps the manifest in step.
 
 ### Required secret: `HUSHBREAK_RELEASE_TOKEN`
 
@@ -173,12 +178,12 @@ Scoop fetches release assets over unauthenticated HTTPS. `WizX20/Hushbreak` must
 
 - Manifest: `bucket/hushbreak.json`. The release workflow bumps `version`/`url`/`hash`; `checkver: github` + `autoupdate` let `scoop update` find new releases.
 - Users subscribe to the bucket straight from this repo: `scoop bucket add hushbreak https://github.com/WizX20/Hushbreak`. The bucket name is a local alias for the repo URL — Scoop keys buckets by that alias, one repo each, so this project needs its own alias next to `psworktree` and ActionsMonitor's `wizx20`. A shared `WizX20/scoop-bucket` is tracked in PSWorktree #8; until then, per-repo buckets keep each release self-contained.
-- Scoop unpacks the zip into `~/scoop/apps/hushbreak/current` (the `lua/` tree, LICENSE, NOTICE, README) and `post_install` copies the three scripts into `%APPDATA%lc\lua\`, because VLC only loads scripts from its own folders. `post_install` also runs on `scoop update`, so an update refreshes the copies; `post_uninstall` deletes them and leaves VLC's preferences alone.
+- Scoop unpacks the zip into `~/scoop/apps/hushbreak/current` (the `lua/` tree, LICENSE, NOTICE, README) and `post_install` copies the three scripts into `%APPDATA%\vlc\lua\`, because VLC only loads scripts from its own folders. `post_install` also runs on `scoop update`, so an update refreshes the copies; `post_uninstall` deletes them and leaves VLC's preferences alone.
 - To try a manifest change before a release, test the hook script on its own: load `bucket/hushbreak.json`, `[scriptblock]::Create($m.post_install -join "`r`n")`, and invoke it with `$dir` set to a folder that holds a `lua/` tree.
 
 ## winget
 
-Not yet. winget has no notion of VLC add-ons; publishing means wrapping the scripts in an installer that copies them into `%APPDATA%lc\lua`. Tracked in issue #4 — the README says so.
+Not yet. winget has no notion of VLC add-ons; publishing means wrapping the scripts in an installer that copies them into `%APPDATA%\vlc\lua`. Tracked in issue #4 — the README says so.
 
 ## Conventions
 
