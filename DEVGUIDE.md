@@ -132,7 +132,7 @@ The `check` job decides first, on `main`:
 1. **Anything to release?** If `main` is exactly the commit of the latest `v*` tag, stop quietly (the weekly run is a no-op on a quiet week) — unless that tag has no published GitHub Release: then fail with the command that publishes its draft (see below).
 2. **Which version?** The dispatch input if given; else `M.VERSION` from `hushbreak_core.lua` when no tag for it exists yet (first release, or a bump made in a PR); else the next patch of it. For a **minor/major** bump, raise `M.VERSION` in your PR — the next release ships exactly that.
 3. **Validate** — plain `x.y.z`, no such tag yet, not below the source version.
-4. **Gate on CI** — the CI run of the exact commit on `main` must be `success`.
+4. **Gate on CI** — the CI run of the exact commit on `main` must be `success`. An API error, or no CI run after five minutes, refuses the release rather than letting it through.
 
 Then the `release` job, on that same commit — not whatever `main` is by then:
 
