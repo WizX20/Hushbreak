@@ -129,7 +129,7 @@ task release VERSION=1.1.0      # release now with an explicit version
 
 The `check` job decides first, on `main`:
 
-1. **Anything to release?** If `main` is exactly the commit of the latest `v*` tag, stop quietly (the weekly run is a no-op on a quiet week).
+1. **Anything to release?** If `main` is exactly the commit of the latest `v*` tag, stop quietly (the weekly run is a no-op on a quiet week) — unless that tag has no published GitHub Release: then fail with the command that publishes its draft (see below).
 2. **Which version?** The dispatch input if given; else `M.VERSION` from `hushbreak_core.lua` when no tag for it exists yet (first release, or a bump made in a PR); else the next patch of it. For a **minor/major** bump, raise `M.VERSION` in your PR — the next release ships exactly that.
 3. **Validate** — plain `x.y.z`, no such tag yet, not below the source version.
 4. **Gate on CI** — the CI run of the exact commit on `main` must be `success`.
@@ -140,10 +140,12 @@ Then the `release` job, on that same commit — not whatever `main` is by then:
 6. **Lint + test** the stamped sources on Lua 5.1.
 7. **Pack** — `scripts/pack.ps1` builds `dist/Hushbreak-x.y.z.zip` (`lua/` tree plus `LICENSE`, `NOTICE`, `README.md`) and prints its SHA256.
 8. **Bump the bucket** — `bucket/hushbreak.json` gets the new `version`, `url` and `hash`, edited in place.
-9. **Commit + tag** `chore: release vx.y.z` (as `github-actions[bot]`) with tag `vx.y.z`, and push both **atomically** to `main`: when `main` moved meanwhile the push is refused and nothing lands — run the release again.
-10. **GitHub Release** `vx.y.z` with the zip attached, the changelog section and the SHA256 as body.
+9. **Commit** `chore: release vx.y.z` (as `github-actions[bot]`).
+10. **Draft the GitHub Release** `vx.y.z` with the zip attached, the changelog section and the SHA256 as body — before anything reaches `main`.
+11. **Tag + push** — tag `vx.y.z`, then push the commit and the tag **atomically** to `main`: when `main` moved meanwhile the push is refused, nothing lands and the draft is deleted — run the release again.
+12. **Publish** the draft, as the latest release (Scoop's `checkver` follows it).
 
-If step 10 fails after step 9 pushed, create the release by hand with `git gh release create vx.y.z dist/Hushbreak-x.y.z.zip` from a fresh checkout of the tag — the tag check in step 3 refuses a re-run.
+When step 12 fails, `main` and the tag are out and `bucket/hushbreak.json` on `main` points at the draft's zip, so `scoop install` fails until the draft is published: `git gh release edit vx.y.z --draft=false --latest`. The next run stops in step 1 with that same command instead of reporting "nothing to release". Do not rebuild the zip from a checkout of the tag and upload that instead — a re-packed zip has another hash than the one in the pushed manifest. If the draft is gone, its zip is too: merge anything to `main` and release again.
 
 ### First release
 
