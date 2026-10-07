@@ -158,7 +158,7 @@ When step 12 fails, `main` and the tag are out and `bucket/hushbreak.json` on `m
 1. GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate. Resource owner `WizX20`, repository access: only `Hushbreak`, permissions: **Contents: Read and write** (Metadata: Read is added automatically). Expiry: one year at most — note the date in the rotation issue ([#2](https://github.com/WizX20/Hushbreak/issues/2)).
 2. `git gh secret set HUSHBREAK_RELEASE_TOKEN -R WizX20/Hushbreak` and paste the token.
 
-The `check` job fails early with a clear message when the secret is missing. CI's required **release token expiry** job reads the token's real expiry from the API on every PR and push: a warning 30 days out, a failure 14 days out — so an expiring token blocks merges until it is rotated. A push with this token also triggers CI on `main` for the release commit — expected, one extra run per release.
+The `check` job fails early with a clear message when the secret is missing. CI's required **release token expiry** job reads the token's real expiry from the API on every PR and push: a warning 30 days out, a failure 14 days out — so an expiring token blocks merges until it is rotated. A push with this token also triggers CI on `main` for the release commit — expected, one extra run per release. Only the push step sees the token: both checkouts persist no credentials, so the apt packages, luacheck and the test suite never run next to it.
 
 ### Branch rules (ruleset `main`)
 
