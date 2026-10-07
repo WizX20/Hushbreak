@@ -129,21 +129,23 @@ task release VERSION=1.1.0      # release now with an explicit version
 
 The `check` job decides first, on `main`:
 
-1. **Anything to release?** If `main` is exactly the commit of the latest `v*` tag, stop quietly (the weekly run is a no-op on a quiet week).
+1. **Anything to release?** If `main` is exactly the commit of the latest `v*` tag, stop quietly (the weekly run is a no-op on a quiet week) — unless that tag has no published GitHub Release: then fail with the command that publishes its draft (see below).
 2. **Which version?** The dispatch input if given; else `M.VERSION` from `hushbreak_core.lua` when no tag for it exists yet (first release, or a bump made in a PR); else the next patch of it. For a **minor/major** bump, raise `M.VERSION` in your PR — the next release ships exactly that.
 3. **Validate** — plain `x.y.z`, no such tag yet, not below the source version.
-4. **Gate on CI** — the CI run of the exact commit on `main` must be `success`.
+4. **Gate on CI** — the CI run of the exact commit on `main` must be `success`. An API error, or no CI run after five minutes, refuses the release rather than letting it through.
 
-Then the `release` job:
+Then the `release` job, on that same commit — not whatever `main` is by then:
 
 5. **Stamp** — `scripts/set-version.ps1` writes the version into `hushbreak_core.lua` and the extension's descriptor; `scripts/cut-changelog.ps1 -FallbackFromGit` turns `## [Unreleased]` into `## [x.y.z] - <date>` and extracts that section as the release notes. An empty section is filled from the commit subjects since the last tag, so write readable subjects even when you skip the changelog.
 6. **Lint + test** the stamped sources on Lua 5.1.
 7. **Pack** — `scripts/pack.ps1` builds `dist/Hushbreak-x.y.z.zip` (`lua/` tree plus `LICENSE`, `NOTICE`, `README.md`) and prints its SHA256.
 8. **Bump the bucket** — `bucket/hushbreak.json` gets the new `version`, `url` and `hash`, edited in place.
-9. **Commit + tag** `chore: release vx.y.z` on `main` (as `github-actions[bot]`), push with the `vx.y.z` tag.
-10. **GitHub Release** `vx.y.z` with the zip attached, the changelog section and the SHA256 as body.
+9. **Commit** `chore: release vx.y.z` (as `github-actions[bot]`).
+10. **Draft the GitHub Release** `vx.y.z` with the zip attached, the changelog section and the SHA256 as body — before anything reaches `main`.
+11. **Tag + push** — tag `vx.y.z`, then push the commit and the tag **atomically** to `main`: when `main` moved meanwhile the push is refused, nothing lands and the draft is deleted — run the release again.
+12. **Publish** the draft, as the latest release (Scoop's `checkver` follows it).
 
-If step 10 fails after step 9 pushed, create the release by hand with `git gh release create vx.y.z dist/Hushbreak-x.y.z.zip` from a fresh checkout of the tag — the tag check in step 3 refuses a re-run.
+When step 12 fails, `main` and the tag are out and `bucket/hushbreak.json` on `main` points at the draft's zip, so `scoop install` fails until the draft is published: `git gh release edit vx.y.z --draft=false --latest`. The next run stops in step 1 with that same command instead of reporting "nothing to release". Do not rebuild the zip from a checkout of the tag and upload that instead — a re-packed zip has another hash than the one in the pushed manifest. If the draft is gone, its zip is too: merge anything to `main` and release again.
 
 ### First release
 
@@ -156,7 +158,7 @@ If step 10 fails after step 9 pushed, create the release by hand with `git gh re
 1. GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate. Resource owner `WizX20`, repository access: only `Hushbreak`, permissions: **Contents: Read and write** (Metadata: Read is added automatically). Expiry: one year at most — note the date in the rotation issue ([#2](https://github.com/WizX20/Hushbreak/issues/2)).
 2. `git gh secret set HUSHBREAK_RELEASE_TOKEN -R WizX20/Hushbreak` and paste the token.
 
-The `check` job fails early with a clear message when the secret is missing. CI's required **release token expiry** job reads the token's real expiry from the API on every PR and push: a warning 30 days out, a failure 14 days out — so an expiring token blocks merges until it is rotated. A push with this token also triggers CI on `main` for the release commit — expected, one extra run per release.
+The `check` job fails early with a clear message when the secret is missing. It only sees whether the secret is set: an expired or revoked token is refused by the push in step 11 (the draft is deleted, nothing is published). CI's required **release token expiry** job reads the token's real expiry from the API on every PR and push, and in a weekly scheduled run on Mondays 05:00 UTC, the day before the release: a warning 30 days out, a failure 14 days out — so an expiring token blocks merges until it is rotated — and a failure when the secret is missing or the API rejects the token. A failed scheduled run emails the maintainer. Pull requests from forks and from Dependabot skip the job — their runs get no Actions secrets — and a skipped job counts as passed for the required check. GitHub disables scheduled workflows after 60 days without repository activity, and the weekly release only pushes when something was merged, so in a very quiet stretch both schedules stop: then the dated `maintenance` issue ([#2](https://github.com/WizX20/Hushbreak/issues/2)) and GitHub's own expiry mail are the reminders left. A push with this token also triggers CI on `main` for the release commit — expected, one extra run per release. Only the push step sees the token: both checkouts persist no credentials, so the apt packages, luacheck and the test suite never run next to it.
 
 ### Branch rules (ruleset `main`)
 

@@ -4,22 +4,31 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Weekly on main, the day before the Tuesday release: in a quiet week nothing else would run
+  # the release token expiry check (a failed scheduled run emails the maintainer), and it shows
+  # a runner image or a newly installed lua5.1 / lua-check package breaking the build.
+  schedule:
+    - cron: "0 5 * * 1"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  # Superseded PR pushes are cancelled; runs on main always finish, so the release gate never
-  # meets a 'cancelled' run for the commit it is about to ship.
+  # A pull request shares one group, so a newer push cancels the superseded run. Everything else
+  # gets a group per commit: GitHub cancels a *pending* run in a group when a newer one queues,
+  # even with cancel-in-progress off, so a shared group for main would cancel the middle run of
+  # three quick merges - and the release gate refuses a commit whose CI was cancelled.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
     name: lint + test (Lua 5.1)
     runs-on: ubuntu-latest
+    # A hung apt mirror or test run fails here, not after GitHub's 6-hour default.
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Lua 5.1 and luacheck
         # VLC 3 embeds Lua 5.1: the suite runs on exactly that version here. The scripts
@@ -40,14 +49,15 @@ jobs:
     name: pack release zip
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Pack
         shell: pwsh
         run: ./scripts/pack.ps1
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: hushbreak-zip
           path: dist/Hushbreak-*.zip
@@ -55,9 +65,15 @@ jobs:
   token-expiry:
     name: release token expiry
     runs-on: ubuntu-latest
-    # Pull requests from forks carry no secrets: nothing to check there, and the job must not
-    # block them. Everything else (own branches, pushes to main) gets the check.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 5
+    # Pull requests from forks carry no secrets, and neither do Dependabot's (it only gets the
+    # separate Dependabot secrets): nothing to check there, and the job must not block them - a
+    # skipped job counts as passed for the required check. Everything else (own branches, pushes
+    # to main, the weekly run) gets the check.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.user.login != 'dependabot[bot]')
     env:
       SECRET_NAME: HUSHBREAK_RELEASE_TOKEN
       WARN_DAYS: 30
