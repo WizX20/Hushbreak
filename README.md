@@ -88,7 +88,7 @@ How much softer the breaks play is set under View > *Hushbreak* — see *Setting
 
 ## Settings
 
-**The volume during ad breaks is set in VLC: View > *Hushbreak*.** Two numbers — *softer by* (percent of your current volume; 60 turns 100 % into 40 %) and *never below* (percent of full volume, a floor for quiet listening) — and **Apply**. It takes effect at once, also in a break that is playing, and stays: the dialog saves `hushbreak-settings.txt` in VLC's user data folder (`%APPDATA%lc` on Windows), which Hushbreak reads at every start. The file is plain `key=value` lines, so any setting from the table below can be put there by hand.
+**The volume during ad breaks is set in VLC: View > *Hushbreak*.** Two numbers — *softer by* (percent of your current volume; 60 turns 100 % into 40 %) and *never below* (percent of full volume, a floor for quiet listening) — and **Apply**. It takes effect at once, also in a break that is playing, and stays: the dialog saves `hushbreak-settings.txt` in VLC's user data folder (`%APPDATA%\vlc` on Windows), which Hushbreak reads at every start. The file is plain `key=value` lines, so any setting from the table below can be put there by hand.
 
 Everything else travels in VLC's `lua-config` option as a Lua table named after the script. On the command line:
 

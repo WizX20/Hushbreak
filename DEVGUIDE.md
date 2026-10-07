@@ -173,12 +173,12 @@ Scoop fetches release assets over unauthenticated HTTPS. `WizX20/Hushbreak` must
 
 - Manifest: `bucket/hushbreak.json`. The release workflow bumps `version`/`url`/`hash`; `checkver: github` + `autoupdate` let `scoop update` find new releases.
 - Users subscribe to the bucket straight from this repo: `scoop bucket add hushbreak https://github.com/WizX20/Hushbreak`. The bucket name is a local alias for the repo URL — Scoop keys buckets by that alias, one repo each, so this project needs its own alias next to `psworktree` and ActionsMonitor's `wizx20`. A shared `WizX20/scoop-bucket` is tracked in PSWorktree #8; until then, per-repo buckets keep each release self-contained.
-- Scoop unpacks the zip into `~/scoop/apps/hushbreak/current` (the `lua/` tree, LICENSE, NOTICE, README) and `post_install` copies the three scripts into `%APPDATA%lc\lua\`, because VLC only loads scripts from its own folders. `post_install` also runs on `scoop update`, so an update refreshes the copies; `post_uninstall` deletes them and leaves VLC's preferences alone.
+- Scoop unpacks the zip into `~/scoop/apps/hushbreak/current` (the `lua/` tree, LICENSE, NOTICE, README) and `post_install` copies the three scripts into `%APPDATA%\vlc\lua\`, because VLC only loads scripts from its own folders. `post_install` also runs on `scoop update`, so an update refreshes the copies; `post_uninstall` deletes them and leaves VLC's preferences alone.
 - To try a manifest change before a release, test the hook script on its own: load `bucket/hushbreak.json`, `[scriptblock]::Create($m.post_install -join "`r`n")`, and invoke it with `$dir` set to a folder that holds a `lua/` tree.
 
 ## winget
 
-Not yet. winget has no notion of VLC add-ons; publishing means wrapping the scripts in an installer that copies them into `%APPDATA%lc\lua`. Tracked in issue #4 — the README says so.
+Not yet. winget has no notion of VLC add-ons; publishing means wrapping the scripts in an installer that copies them into `%APPDATA%\vlc\lua`. Tracked in issue #4 — the README says so.
 
 ## Conventions
 
