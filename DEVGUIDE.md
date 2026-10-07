@@ -134,13 +134,13 @@ The `check` job decides first, on `main`:
 3. **Validate** — plain `x.y.z`, no such tag yet, not below the source version.
 4. **Gate on CI** — the CI run of the exact commit on `main` must be `success`.
 
-Then the `release` job:
+Then the `release` job, on that same commit — not whatever `main` is by then:
 
 5. **Stamp** — `scripts/set-version.ps1` writes the version into `hushbreak_core.lua` and the extension's descriptor; `scripts/cut-changelog.ps1 -FallbackFromGit` turns `## [Unreleased]` into `## [x.y.z] - <date>` and extracts that section as the release notes. An empty section is filled from the commit subjects since the last tag, so write readable subjects even when you skip the changelog.
 6. **Lint + test** the stamped sources on Lua 5.1.
 7. **Pack** — `scripts/pack.ps1` builds `dist/Hushbreak-x.y.z.zip` (`lua/` tree plus `LICENSE`, `NOTICE`, `README.md`) and prints its SHA256.
 8. **Bump the bucket** — `bucket/hushbreak.json` gets the new `version`, `url` and `hash`, edited in place.
-9. **Commit + tag** `chore: release vx.y.z` on `main` (as `github-actions[bot]`), push with the `vx.y.z` tag.
+9. **Commit + tag** `chore: release vx.y.z` (as `github-actions[bot]`) with tag `vx.y.z`, and push both **atomically** to `main`: when `main` moved meanwhile the push is refused and nothing lands — run the release again.
 10. **GitHub Release** `vx.y.z` with the zip attached, the changelog section and the SHA256 as body.
 
 If step 10 fails after step 9 pushed, create the release by hand with `git gh release create vx.y.z dist/Hushbreak-x.y.z.zip` from a fresh checkout of the tag — the tag check in step 3 refuses a re-run.
